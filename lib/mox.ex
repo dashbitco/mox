@@ -1,6 +1,6 @@
 defmodule Mox do
   @moduledoc """
-  Mox is a library for defining mocks in Elixir.
+  Mox is a library for defining concurrent mocks in Elixir.
 
   The library follows the principles outlined in
   ["Mocks and explicit contracts"](http://blog.plataformatec.com.br/2015/10/mocks-and-explicit-contracts/),
@@ -14,7 +14,7 @@ defmodule Mox do
     3. Concurrency support. Tests using the same mock can still use `async: true`
 
     4. Rely on pattern matching and function clauses for asserting on the
-       input instead of complex mock rules
+       input instead of complex expectation rules
 
   ## Example
 
@@ -39,7 +39,7 @@ defmodule Mox do
 
   Or in your `test_helper.exs`:
 
-      Applicartion.put_env(:my_app, :calculator, MyApp.CalcMock)
+      Application.put_env(:my_app, :calculator, MyApp.CalcMock)
 
   Now in your tests, you can define expectations and verify them:
 
@@ -63,8 +63,22 @@ defmodule Mox do
   It also means verification must be done in the test process itself
   and cannot be done on `on_exit` callbacks.
 
-  Similarly, if you define a expectation on the current process and
-  invoke the mock on another process, the mock will not be available.
+  Similarly, if you set expectations on the current process and invoke
+  the mock on another process, the expectation will not be available.
+  In cases where collaboration between multiple processes is required,
+  you can skip Mox altogether and directly define a module with the
+  behaviour to be tested via multiple processes:
+
+      defmodule MyApp.YetAnotherCalcMock do
+        @behaviour MyApp.Calculator
+        def add(..., ...), do: ...
+        def mult(..., ...), do: ...
+      end
+
+  After all, the main motivation behind Mox is to provide concurrent
+  mocks defined by explicit contracts. If concurrency is not an option,
+  you can still leverage plain Elixir modules to implement those
+  contracts.
   """
 
   @name __MODULE__

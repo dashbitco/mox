@@ -1,6 +1,6 @@
 # Mox
 
-Mox is a tiny library for defining mocks in Elixir.
+Mox is a library for defining concurrent mocks in Elixir.
 
 The library follows the principles outlined in ["Mocks and explicit contracts"](http://blog.plataformatec.com.br/2015/10/mocks-and-explicit-contracts/), summarized below:
 
@@ -11,7 +11,7 @@ The library follows the principles outlined in ["Mocks and explicit contracts"](
   3. Concurrency support. Tests using the same mock can still use `async: true`
 
   4. Rely on pattern matching and function clauses for asserting on the
-     input instead of complex mock rules
+     input instead of complex expectation rules
 
 [See the documentation](https://hexdocs.pm/mox) for more information.
 
