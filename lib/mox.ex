@@ -32,8 +32,12 @@ defmodule Mox do
 
   Once the mock is defined, you can pass it to the system under the test.
   If the system under test relies on application configuration, you should
-  also set it in your `test_helper.exs` before the tests starts to keep the
-  asynchronous property:
+  also set it before the tests starts to keep the async property. Usually
+  in your config files:
+
+      config :my_app, :calculator, MyApp.CalcMock
+
+  Or in your `test_helper.exs`:
 
       Applicartion.put_env(:my_app, :calculator, MyApp.CalcMock)
 
@@ -57,7 +61,7 @@ defmodule Mox do
   All expectations are defined based on the current process. This
   means multiple tests using the same mock can still run concurrently.
   It also means verification must be done in the test process itself
-  and therefore cannot be done on `on_exit` callbacks.
+  and cannot be done on `on_exit` callbacks.
 
   Similarly, if you define a expectation on the current process and
   invoke the mock on another process, the mock will not be available.
