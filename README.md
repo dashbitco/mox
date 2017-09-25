@@ -4,13 +4,11 @@ Mox is a tiny library for defining mocks in Elixir.
 
 The library follows the principles outlined in ["Mocks and explicit contracts"](http://blog.plataformatec.com.br/2015/10/mocks-and-explicit-contracts/), summarized below:
 
-  1. No ad-hoc mocks. You can only create mocks based on behaviours.
+  1. No ad-hoc mocks. You can only create mocks based on behaviours
 
-  2. No dynamic generation of modules during tests. Mocks defined by Mox
-     are preferably defined in your `test_helper.exs` or in a `setup_all`
-     block and not per test.
+  2. No dynamic generation of modules during tests. Mocks are preferably defined in your `test_helper.exs` or in a `setup_all` block and not per test
 
-  3. They support concurrency (tests can still use `async: true`)
+  3. Concurrency support. Tests using the same mock can still use `async: true`
 
   4. Rely on pattern matching and function clauses for asserting on the
      input instead of complex mock rules

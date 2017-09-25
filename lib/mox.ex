@@ -6,13 +6,12 @@ defmodule Mox do
   ["Mocks and explicit contracts"](http://blog.plataformatec.com.br/2015/10/mocks-and-explicit-contracts/),
   summarized below:
 
-    1. No ad-hoc mocks. You can only create mocks based on behaviours.
+    1. No ad-hoc mocks. You can only create mocks based on behaviours
 
-    2. No dynamic generation of modules during tests. Mocks defined by Mox
-       are preferably defined in your `test_helper.exs` or in a `setup_all`
-       block and not per test.
+    2. No dynamic generation of modules during tests. Mocks are preferably defined
+       in your `test_helper.exs` or in a `setup_all` block and not per test
 
-    3. They support concurrency (tests can still use `async: true`)
+    3. Concurrency support. Tests using the same mock can still use `async: true`
 
     4. Rely on pattern matching and function clauses for asserting on the
        input instead of complex mock rules
@@ -55,12 +54,13 @@ defmodule Mox do
         verify!() # or verify!(MyApp.CalcMock)
       end
 
-  Notice Mox works based on the current process. Verification must
-  be done in the test process and therefore cannot be done on `on_exit`
-  callbacks.
+  All expectations are defined based on the current process. This
+  means multiple tests using the same mock can still run concurrently.
+  It also means verification must be done in the test process itself
+  and therefore cannot be done on `on_exit` callbacks.
 
-  Similarly, if you define a expectation on the current process and invoke
-  the mock on another process, the mock will not be available.
+  Similarly, if you define a expectation on the current process and
+  invoke the mock on another process, the mock will not be available.
   """
 
   @name __MODULE__
