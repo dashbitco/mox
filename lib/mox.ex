@@ -14,6 +14,9 @@ defmodule Mox do
 
     3. They support concurrency (tests can still use `async: true`)
 
+    4. Rely on pattern matching and function clauses for asserting on the
+       input instead of complex mock rules
+
   ## Example
 
   As an example, imagine that your library defines a calculator behaviour:
@@ -30,7 +33,8 @@ defmodule Mox do
 
   Once the mock is defined, you can pass it to the system under the test.
   If the system under test relies on application configuration, you should
-  set it before the tests starts to keep the asynchronous property:
+  also set it in your `test_helper.exs` before the tests starts to keep the
+  asynchronous property:
 
       Applicartion.put_env(:my_app, :calculator, MyApp.CalcMock)
 

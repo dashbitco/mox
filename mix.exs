@@ -1,26 +1,47 @@
 defmodule Mox.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :mox,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.5",
       start_permanent: Mix.env == :prod,
-      deps: deps()
+      name: "Mox",
+      description: "Mocks and explicit contracts for Elixir",
+      deps: deps(),
+      docs: docs(),
+      package: package()
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
-    [mod: {Mox.Application, []}]
+    [
+      mod: {Mox.Application, []}
+    ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"},
+      {:ex_doc, "~> 0.16", only: :docs}
     ]
+  end
+
+  defp docs do
+    [
+      main: "Mox",
+      source_ref: "v#{@version}",
+      source_url: "https://github.com/plataformatec/mox"
+    ]
+  end
+
+  defp package do
+    %{
+      licenses: ["Apache 2"],
+      maintainers: ["José Valim"],
+      links: %{"GitHub" => "https://github.com/plataformatec/mox"}
+    }
   end
 end
