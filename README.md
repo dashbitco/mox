@@ -22,10 +22,12 @@ Just add `mox` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:mox, "~> 0.1.0"}
+    {:mox, "~> 0.1.0", only: :test}
   ]
 end
 ```
+
+Mox should be automatically started unless the `:applications` key is set inside `def application` in your `mix.exs`. In such cases, you need to [remove the `:applications` key in favor of `:extra_applications`](https://elixir-lang.org/blog/2017/01/05/elixir-v1-4-0-released/#application-inference) or call `Application.ensure_all_started(:mox)` in your `test/test_helper.exs`.
 
 ## License
 
