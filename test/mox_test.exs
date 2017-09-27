@@ -132,4 +132,62 @@ defmodule MoxTest do
       end
     end
   end
+
+  describe "stub/3" do
+    test "allows repeated invocations" do
+      stub(CalcMock, :add, fn x, y -> x + y end)
+      assert CalcMock.add(1, 2) == 3
+      assert CalcMock.add(3, 4) == 7
+    end
+
+    test "does not fail verification if not called" do
+      stub(CalcMock, :add, fn x, y -> x + y end)
+      verify!()
+    end
+
+    test "gives expected calls precedence" do
+      CalcMock
+      |> stub(:add, fn x, y -> x + y end)
+      |> expect(:add, fn _, _ -> :expected end)
+      assert CalcMock.add(1, 1) == :expected
+      verify!()
+    end
+
+    test "invokes stub after expectations are fulfilled" do
+      CalcMock
+      |> stub(:add, fn _x, _y -> :stub end)
+      |> expect(:add, 2, fn _, _ -> :expected end)
+      assert CalcMock.add(1, 1) == :expected
+      assert CalcMock.add(1, 1) == :expected
+      assert CalcMock.add(1, 1) == :stub
+      verify!()
+    end
+
+    test "overwrites earlier stubs" do
+      CalcMock
+      |> stub(:add, fn x, y -> x + y end)
+      |> stub(:add, fn _x, _y -> 42 end)
+      assert CalcMock.add(1, 1) == 42
+    end
+
+    test "raises if a non-mock is given" do
+      assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
+        stub(Unknown, :add, fn x, y -> x + y end)
+      end
+
+      assert_raise ArgumentError, ~r"module String is not a mock", fn ->
+        stub(String, :add, fn x, y -> x + y end)
+      end
+    end
+
+    test "raises if function is not in behaviour" do
+      assert_raise ArgumentError, ~r"unknown function oops/2 for mock CalcMock", fn ->
+        stub(CalcMock, :oops, fn x, y -> x + y end)
+      end
+
+      assert_raise ArgumentError, ~r"unknown function add/3 for mock CalcMock", fn ->
+        stub(CalcMock, :add, fn x, y, z -> x + y + z end)
+      end
+    end
+  end
 end
