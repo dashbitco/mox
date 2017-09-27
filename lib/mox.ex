@@ -26,9 +26,25 @@ defmodule Mox do
       end
 
   If you want to mock the calculator behaviour during tests, the first step
-  is to define the mock, usually in your `test_helper.exs`:
+  is to define the mock. To make it available during compilation, create new
+  file under `test/support/mocks.ex`:
 
       Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
+
+  The second step is to make sure that files in `test/support` get compiled
+  with the rest of the project. Edit your `mix.exs` file to add `test/support`
+  directory to compilation paths:
+
+      def project do
+        [
+          ...
+          elixirc_paths: elixirc_paths(Mix.env),
+          ...
+        ]
+      end
+
+      defp elixirc_paths(:test), do: ["test/support", "lib"]
+      defp elixirc_paths(_),     do: ["lib"]
 
   Once the mock is defined, you can pass it to the system under the test.
   If the system under test relies on application configuration, you should
