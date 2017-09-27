@@ -26,25 +26,9 @@ defmodule Mox do
       end
 
   If you want to mock the calculator behaviour during tests, the first step
-  is to define the mock. To make it available during compilation, create new
-  file under `test/support/mocks.ex`:
+  is to define the mock, usually in your `test_helper.exs`:
 
       Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
-
-  The second step is to make sure that files in `test/support` get compiled
-  with the rest of the project. Edit your `mix.exs` file to add `test/support`
-  directory to compilation paths:
-
-      def project do
-        [
-          ...
-          elixirc_paths: elixirc_paths(Mix.env),
-          ...
-        ]
-      end
-
-      defp elixirc_paths(:test), do: ["test/support", "lib"]
-      defp elixirc_paths(_),     do: ["lib"]
 
   Once the mock is defined, you can pass it to the system under the test.
   If the system under test relies on application configuration, you should
@@ -79,11 +63,39 @@ defmodule Mox do
   It also means verification must be done in the test process itself
   and cannot be done on `on_exit` callbacks.
 
-  Similarly, if you set expectations on the current process and invoke
-  the mock on another process, the expectation will not be available.
-  In cases where collaboration between multiple processes is required,
-  you can skip Mox altogether and directly define a module with the
-  behaviour to be tested via multiple processes:
+  ## Compile-time requirements
+
+  If the mock needs to be available during the project compilation, for
+  instance because you get undefined function warnings, then instead of
+  defining the mock in your `test_helper.exs`, you should instead define
+  it under `test/support/mocks.ex`:
+
+      Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
+
+  Then you need to make sure that files in `test/support` get compiled
+  with the rest of the project. Edit your `mix.exs` file to add `test/support`
+  directory to compilation paths:
+
+      def project do
+        [
+          ...
+          elixirc_paths: elixirc_paths(Mix.env),
+          ...
+        ]
+      end
+
+      defp elixirc_paths(:test), do: ["test/support", "lib"]
+      defp elixirc_paths(_),     do: ["lib"]
+
+  ## Multi-process collaboration
+
+  Mox currently does not support multi-process collaboration. If you set
+  expectations on the current process and invoke the mock on another process,
+  the expectation will not be available.
+
+  In cases where collaboration between multiple processes is required, you
+  can skip Mox altogether and directly define a module with the behaviour
+  to be tested via multiple processes:
 
       defmodule MyApp.YetAnotherCalcMock do
         @behaviour MyApp.Calculator
@@ -91,10 +103,9 @@ defmodule Mox do
         def mult(..., ...), do: ...
       end
 
-  After all, the main motivation behind Mox is to provide concurrent
-  mocks defined by explicit contracts. If concurrency is not an option,
-  you can still leverage plain Elixir modules to implement those
-  contracts.
+  After all, the main motivation behind Mox is to provide concurrent mocks
+  defined by explicit contracts. If concurrency is not an option, you can still
+  leverage plain Elixir modules to implement those contracts.
   """
 
   @name __MODULE__
