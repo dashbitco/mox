@@ -187,27 +187,61 @@ defmodule Mox do
   """
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 1 and is_function(code) do
-    validate_mock!(mock)
-    arity = :erlang.fun_info(code)[:arity]
-
-    unless function_exported?(mock, name, arity) do
-      raise ArgumentError, "unknown function #{name}/#{arity} for mock #{inspect mock}"
-    end
-
+    key = stub_key!(mock, name, code)
     calls = List.duplicate(code, n)
-    key = {self(), mock, name, arity}
 
-    case Registry.register(@name, key, {n, calls}) do
+    case Registry.register(@name, key, {n, calls, nil}) do
       {:ok, _} ->
         mock
 
       {:error, {:already_registered, pid}} when pid == self() ->
-        Registry.update_value(@name, key, fn {current_n, current_calls} ->
-          {current_n + n, current_calls ++ calls}
+        Registry.update_value(@name, key, fn {current_n, current_calls, stub} ->
+          {current_n + n, current_calls ++ calls, stub}
         end)
     end
 
     mock
+  end
+
+  @doc """
+  Defines that the `name` in `mock` with arity given by
+  `code` can be invoked zero or many times. Does not get
+  verified like expected stubs do. Stubs created with
+  `expect/4` will take precedence when invoking the mock
+  in order to fulfill expectations. After expecations are
+  fulfilled, the stub created with `stub/3` will be used.
+
+  ## Examples
+
+  To allow `MyMock.add/2` to be called:
+
+      stub(MyMock, :add, fn x, y -> x + y end)
+
+  `stub/3` will overwrite any previous calls to `stub/3`.
+  """
+  def stub(mock, name, code)
+      when is_atom(mock) and is_atom(name) and is_function(code) do
+    key = stub_key!(mock, name, code)
+    case Registry.register(@name, key, {0, [], code}) do
+      {:ok, _} ->
+        mock
+
+      {:error, {:already_registered, pid}} when pid == self() ->
+        Registry.update_value(@name, key, fn {n, calls, _} ->
+          {n, calls, code}
+        end)
+    end
+
+    mock
+  end
+
+  defp stub_key!(mock, name, code) do
+    validate_mock!(mock)
+    arity = :erlang.fun_info(code)[:arity]
+    unless function_exported?(mock, name, arity) do
+      raise ArgumentError, "unknown function #{name}/#{arity} for mock #{inspect mock}"
+    end
+    {self(), mock, name, arity}
   end
 
   @doc """
@@ -231,7 +265,7 @@ defmodule Mox do
       for {_, module, name, arity} = key <- Registry.keys(@name, self()),
           module == mock or mock == :all,
           value <- Registry.lookup(@name, key),
-          {_pid, {count, calls}} = value,
+          {_pid, {count, calls, _stub}} = value,
           calls != [] do
         mfa = Exception.format_mfa(module, name, arity)
         pending = count - length(calls)
@@ -265,13 +299,16 @@ defmodule Mox do
         mfa = Exception.format_mfa(mock, name, arity)
         raise UnexpectedCallError, "no expectation defined for #{mfa} in process #{inspect(self())}"
 
-      {_, {count, []}} ->
+      {_, {_, [], stub}} when not is_nil(stub) ->
+          apply(stub, args)
+
+      {_, {count, [], _}} ->
         mfa = Exception.format_mfa(mock, name, arity)
         raise UnexpectedCallError,
               "expected #{mfa} to be called #{times(count)} but it has been " <>
               "called #{times(count + 1)} in process #{inspect(self())}"
 
-      {_, {_, [call | _]}} ->
+      {_, {_, [call | _], _}} ->
         apply(call, args)
     end
   end
@@ -279,6 +316,6 @@ defmodule Mox do
   defp times(1), do: "once"
   defp times(n), do: "#{n} times"
 
-  defp dispatch_update({total, []}), do: {total, []}
-  defp dispatch_update({total, [_ | tail]}), do: {total, tail}
+  defp dispatch_update({_total, [], _stub} = state), do: state
+  defp dispatch_update({total, [_ | tail], stub}), do: {total, tail, stub}
 end
