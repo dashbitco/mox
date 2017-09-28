@@ -169,7 +169,7 @@ defmodule Mox do
 
   @doc """
   Defines that the `name` in `mock` with arity given by
-  `code` will be invoked the `n` times.
+  `code` will be invoked `n` times.
 
   ## Examples
 
@@ -187,7 +187,7 @@ defmodule Mox do
   """
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 1 and is_function(code) do
-    key = stub_key!(mock, name, code)
+    key = mock_key!(mock, name, code)
     calls = List.duplicate(code, n)
 
     case Registry.register(@name, key, {n, calls, nil}) do
@@ -205,15 +205,17 @@ defmodule Mox do
 
   @doc """
   Defines that the `name` in `mock` with arity given by
-  `code` can be invoked zero or many times. Does not get
-  verified like expected stubs do. Stubs created with
-  `expect/4` will take precedence when invoking the mock
-  in order to fulfill expectations. After expecations are
-  fulfilled, the stub created with `stub/3` will be used.
+  `code` can be invoked zero or many times.
+
+  Opposite to expectations, stubs are never verified.
+
+  If expectations and stubs are defined for the same function
+  and arity, the stub is invoked only after all expecations are
+  fulfilled.
 
   ## Examples
 
-  To allow `MyMock.add/2` to be called:
+  To allow `MyMock.add/2` to be called any number of times:
 
       stub(MyMock, :add, fn x, y -> x + y end)
 
@@ -221,7 +223,7 @@ defmodule Mox do
   """
   def stub(mock, name, code)
       when is_atom(mock) and is_atom(name) and is_function(code) do
-    key = stub_key!(mock, name, code)
+    key = mock_key!(mock, name, code)
     case Registry.register(@name, key, {0, [], code}) do
       {:ok, _} ->
         mock
@@ -235,7 +237,7 @@ defmodule Mox do
     mock
   end
 
-  defp stub_key!(mock, name, code) do
+  defp mock_key!(mock, name, code) do
     validate_mock!(mock)
     arity = :erlang.fun_info(code)[:arity]
     unless function_exported?(mock, name, arity) do
