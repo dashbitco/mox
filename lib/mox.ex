@@ -108,8 +108,6 @@ defmodule Mox do
   leverage plain Elixir modules to implement those contracts.
   """
 
-  @name __MODULE__
-
   defmodule UnexpectedCallError do
     defexception [:message]
   end
@@ -190,15 +188,7 @@ defmodule Mox do
     key = mock_key!(mock, name, code)
     calls = List.duplicate(code, n)
 
-    case Registry.register(@name, key, {n, calls, nil}) do
-      {:ok, _} ->
-        mock
-
-      {:error, {:already_registered, pid}} when pid == self() ->
-        Registry.update_value(@name, key, fn {current_n, current_calls, stub} ->
-          {current_n + n, current_calls ++ calls, stub}
-        end)
-    end
+    Mox.Server.add_expectation(self(), key, {n, calls, nil})
 
     mock
   end
@@ -224,15 +214,8 @@ defmodule Mox do
   def stub(mock, name, code)
       when is_atom(mock) and is_atom(name) and is_function(code) do
     key = mock_key!(mock, name, code)
-    case Registry.register(@name, key, {0, [], code}) do
-      {:ok, _} ->
-        mock
 
-      {:error, {:already_registered, pid}} when pid == self() ->
-        Registry.update_value(@name, key, fn {n, calls, _} ->
-          {n, calls, code}
-        end)
-    end
+    Mox.Server.add_expectation(self(), key, {0, [], code})
 
     mock
   end
@@ -243,7 +226,7 @@ defmodule Mox do
     unless function_exported?(mock, name, arity) do
       raise ArgumentError, "unknown function #{name}/#{arity} for mock #{inspect mock}"
     end
-    {self(), mock, name, arity}
+    {mock, name, arity}
   end
 
   @doc """
@@ -264,10 +247,11 @@ defmodule Mox do
 
   defp verify_mock_or_all!(mock) do
     failed =
-      for {_, module, name, arity} = key <- Registry.keys(@name, self()),
+      for {module, name, arity} = key <- Mox.Server.keys(self()),
           module == mock or mock == :all,
-          value <- Registry.lookup(@name, key),
-          {_pid, {count, calls, _stub}} = value,
+
+          {count, calls, _stub} = Mox.Server.get_expectation(self(), key),
+
           calls != [] do
         mfa = Exception.format_mfa(module, name, arity)
         pending = count - length(calls)
@@ -296,28 +280,22 @@ defmodule Mox do
 
   @doc false
   def __dispatch__(mock, name, arity, args) do
-    case Registry.update_value(@name, {self(), mock, name, arity}, &dispatch_update/1) do
-      :error ->
+    case Mox.Server.get_fun_to_call(self(), {mock, name, arity}) do
+      :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
         raise UnexpectedCallError, "no expectation defined for #{mfa} in process #{inspect(self())}"
 
-      {_, {_, [], stub}} when not is_nil(stub) ->
-          apply(stub, args)
-
-      {_, {count, [], _}} ->
+      {:out_of_expectations, count} ->
         mfa = Exception.format_mfa(mock, name, arity)
         raise UnexpectedCallError,
               "expected #{mfa} to be called #{times(count)} but it has been " <>
               "called #{times(count + 1)} in process #{inspect(self())}"
 
-      {_, {_, [call | _], _}} ->
-        apply(call, args)
+      {:ok, fun_to_call} ->
+        apply(fun_to_call, args)
     end
   end
 
   defp times(1), do: "once"
   defp times(n), do: "#{n} times"
-
-  defp dispatch_update({_total, [], _stub} = state), do: state
-  defp dispatch_update({total, [_ | tail], stub}), do: {total, tail, stub}
 end
