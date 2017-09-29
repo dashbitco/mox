@@ -17,8 +17,8 @@ defmodule Mox.Server do
     GenServer.call(__MODULE__, {:get_expectation, owner_pid, key})
   end
 
-  def get_fun_to_call(owner_pid, key) do
-    GenServer.call(__MODULE__, {:get_fun_to_call, owner_pid, key})
+  def fetch_fun_to_dispatch(owner_pid, key) do
+    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, owner_pid, key})
   end
 
   def keys(owner_pid) do
@@ -27,60 +27,65 @@ defmodule Mox.Server do
 
   # Callbacks
 
-  def handle_call({:add_expectation, owner_pid, key, {n, calls, stub}}, _from, state) do
-    new_state = state
-                |> maybe_add_pid(owner_pid)
-                |> update_in([owner_pid, key], &(do_add_expectation(&1, {n, calls, stub})))
+  def handle_call({:add_expectation, owner_pid, key, expectation}, _from, state) do
+    state = maybe_add_and_monitor_pid(state, owner_pid)
 
-    {:reply, :ok, new_state}
+    state =
+      update_in state[owner_pid], fn state ->
+        Map.update(state, key, expectation, &merge_expectation(&1, expectation))
+      end
+
+    {:reply, :ok, state}
   end
 
   def handle_call({:get_expectation, owner_pid, key}, _from, state) do
     {:reply, state[owner_pid][key], state}
   end
 
-  def handle_call({:get_fun_to_call, owner_pid, key}, _from, state) do
-    case Map.get(state, owner_pid, %{})[key] do
+  def handle_call({:fetch_fun_to_dispatch, owner_pid, key}, _from, state) do
+    case state[owner_pid][key] do
       nil ->
         {:reply, :no_expectation, state}
 
-      {_, [], stub} when not is_nil(stub) ->
+      {total, [], nil} ->
+        {:reply, {:out_of_expectations, total}, state}
+
+      {_, [], stub} ->
         {:reply, {:ok, stub}, state}
 
-      {total, calls, stub} ->
-        new_state = put_in(state, [owner_pid, key], {total, drop_call(calls), stub})
-        {:reply, block_or_allow_next_call(total, calls), new_state}
+      {total, [call | calls], stub} ->
+        new_state = put_in(state[owner_pid][key], {total, calls, stub})
+        {:reply, {:ok, call}, new_state}
     end
   end
 
   def handle_call({:keys, owner_pid}, _from, state) do
-    keys = state
-           |> Map.get(owner_pid, %{})
-           |> Map.keys()
+    keys =
+      state
+      |> Map.get(owner_pid, %{})
+      |> Map.keys()
 
     {:reply, keys, state}
   end
 
+  def handle_info({:DOWN, _, _, pid, _}, state) do
+    {:noreply, Map.delete(state, pid)}
+  end
+
   # Helper functions
 
-  defp drop_call([]), do: []
-  defp drop_call([_ | tail]), do: tail
+  defp maybe_add_and_monitor_pid(state, pid) do
+    case state do
+      %{^pid => _} ->
+        state
 
-  defp maybe_add_pid(state, pid) do
-    case state[pid] do
-      nil -> Map.put_new(state, pid, %{})
-      _ -> state
+      %{} ->
+        Process.monitor(pid)
+        Map.put(state, pid, %{})
     end
   end
 
-  defp do_add_expectation(nil, {n, calls, stub}), do: {n, calls, stub}
-  defp do_add_expectation({current_n, current_calls, stub}, {n, calls, nil}) do
-    {current_n + n, current_calls ++ calls, stub}
+  defp merge_expectation({current_n, current_calls, current_stub}, {n, calls, stub}) do
+    {current_n + n, current_calls ++ calls, stub || current_stub}
   end
-  defp do_add_expectation({current_n, current_calls, _current_stub}, {0, [], stub}) do
-    {current_n, current_calls, stub}
-  end
-
-  defp block_or_allow_next_call(count, []), do: {:out_of_expectations, count}
-  defp block_or_allow_next_call(_count, [fun_to_call | _]), do: {:ok, fun_to_call}
 end

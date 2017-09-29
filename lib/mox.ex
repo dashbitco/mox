@@ -249,9 +249,7 @@ defmodule Mox do
     failed =
       for {module, name, arity} = key <- Mox.Server.keys(self()),
           module == mock or mock == :all,
-
           {count, calls, _stub} = Mox.Server.get_expectation(self(), key),
-
           calls != [] do
         mfa = Exception.format_mfa(module, name, arity)
         pending = count - length(calls)
@@ -280,7 +278,7 @@ defmodule Mox do
 
   @doc false
   def __dispatch__(mock, name, arity, args) do
-    case Mox.Server.get_fun_to_call(self(), {mock, name, arity}) do
+    case Mox.Server.fetch_fun_to_dispatch(self(), {mock, name, arity}) do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
         raise UnexpectedCallError, "no expectation defined for #{mfa} in process #{inspect(self())}"
