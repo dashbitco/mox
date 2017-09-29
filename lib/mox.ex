@@ -187,9 +187,7 @@ defmodule Mox do
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 1 and is_function(code) do
     key = mock_key!(mock, name, code)
     calls = List.duplicate(code, n)
-
     Mox.Server.add_expectation(self(), key, {n, calls, nil})
-
     mock
   end
 
@@ -214,9 +212,7 @@ defmodule Mox do
   def stub(mock, name, code)
       when is_atom(mock) and is_atom(name) and is_function(code) do
     key = mock_key!(mock, name, code)
-
     Mox.Server.add_expectation(self(), key, {0, [], code})
-
     mock
   end
 
@@ -246,18 +242,17 @@ defmodule Mox do
   end
 
   defp verify_mock_or_all!(mock) do
-    failed =
-      for {module, name, arity} = key <- Mox.Server.keys(self()),
-          module == mock or mock == :all,
-          {count, calls, _stub} = Mox.Server.get_expectation(self(), key),
-          calls != [] do
+    pending = Mox.Server.pending_expectations(self(), mock)
+
+    messages =
+      for {{module, name, arity}, total, pending} <- pending do
         mfa = Exception.format_mfa(module, name, arity)
-        pending = count - length(calls)
-        "  * expected #{mfa} to be invoked #{times(count)} but it was invoked #{times(pending)}"
+        called = total - pending
+        "  * expected #{mfa} to be invoked #{times(total)} but it was invoked #{times(called)}"
       end
 
-    if failed != [] do
-      raise VerificationError, "error while verifying mocks:\n\n#{Enum.join(failed, "\n")}"
+    if messages != [] do
+      raise VerificationError, "error while verifying mocks:\n\n#{Enum.join(messages, "\n")}"
     end
 
     :ok

@@ -9,20 +9,16 @@ defmodule Mox.Server do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
-  def add_expectation(owner_pid, key, {n, calls, stub}) do
-    GenServer.call(__MODULE__, {:add_expectation, owner_pid, key, {n, calls, stub}})
-  end
-
-  def get_expectation(owner_pid, key) do
-    GenServer.call(__MODULE__, {:get_expectation, owner_pid, key})
+  def add_expectation(owner_pid, key, value) do
+    GenServer.call(__MODULE__, {:add_expectation, owner_pid, key, value})
   end
 
   def fetch_fun_to_dispatch(owner_pid, key) do
     GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, owner_pid, key})
   end
 
-  def keys(owner_pid) do
-    GenServer.call(__MODULE__, {:keys, owner_pid})
+  def pending_expectations(owner_pid, for) do
+    GenServer.call(__MODULE__, {:pending_expectations, owner_pid, for})
   end
 
   # Callbacks
@@ -59,13 +55,16 @@ defmodule Mox.Server do
     end
   end
 
-  def handle_call({:keys, owner_pid}, _from, state) do
-    keys =
-      state
-      |> Map.get(owner_pid, %{})
-      |> Map.keys()
+  def handle_call({:pending_expectations, owner_pid, mock}, _from, state) do
+    expectations = Map.get(state, owner_pid, %{})
 
-    {:reply, keys, state}
+    pending =
+      for {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expectations,
+          module == mock or mock == :all do
+        {key, count, length(calls)}
+      end
+
+    {:reply, pending, state}
   end
 
   def handle_info({:DOWN, _, _, pid, _}, state) do
