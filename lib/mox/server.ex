@@ -6,19 +6,23 @@ defmodule Mox.Server do
   # Public API
 
   def start_link(_options) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+    GenServer.start_link(__MODULE__, %{expectations: %{}, allowances: %{}}, name: __MODULE__)
   end
 
   def add_expectation(owner_pid, key, value) do
     GenServer.call(__MODULE__, {:add_expectation, owner_pid, key, value})
   end
 
-  def fetch_fun_to_dispatch(owner_pid, key) do
-    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, owner_pid, key})
+  def fetch_fun_to_dispatch(caller_pid, key) do
+    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, caller_pid, key})
   end
 
   def pending_expectations(owner_pid, for) do
     GenServer.call(__MODULE__, {:pending_expectations, owner_pid, for})
+  end
+
+  def allow(mock, owner_pid, pid) do
+    GenServer.call(__MODULE__, {:allow, mock, owner_pid, pid})
   end
 
   # Callbacks
@@ -27,19 +31,21 @@ defmodule Mox.Server do
     state = maybe_add_and_monitor_pid(state, owner_pid)
 
     state =
-      update_in state[owner_pid], fn state ->
-        Map.update(state, key, expectation, &merge_expectation(&1, expectation))
+      update_in state.expectations[owner_pid], fn owned_expectations ->
+        Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
       end
 
     {:reply, :ok, state}
   end
 
   def handle_call({:get_expectation, owner_pid, key}, _from, state) do
-    {:reply, state[owner_pid][key], state}
+    {:reply, state.expectations[owner_pid][key], state}
   end
 
-  def handle_call({:fetch_fun_to_dispatch, owner_pid, key}, _from, state) do
-    case state[owner_pid][key] do
+  def handle_call({:fetch_fun_to_dispatch, caller_pid, {mock, _, _} = key}, _from, state) do
+    owner_pid = Map.get(state.allowances, {mock, caller_pid}, caller_pid)
+
+    case state.expectations[owner_pid][key] do
       nil ->
         {:reply, :no_expectation, state}
 
@@ -50,13 +56,13 @@ defmodule Mox.Server do
         {:reply, {:ok, stub}, state}
 
       {total, [call | calls], stub} ->
-        new_state = put_in(state[owner_pid][key], {total, calls, stub})
+        new_state = put_in(state.expectations[owner_pid][key], {total, calls, stub})
         {:reply, {:ok, call}, new_state}
     end
   end
 
   def handle_call({:pending_expectations, owner_pid, mock}, _from, state) do
-    expectations = Map.get(state, owner_pid, %{})
+    expectations = Map.get(state.expectations, owner_pid, %{})
 
     pending =
       for {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expectations,
@@ -67,20 +73,46 @@ defmodule Mox.Server do
     {:reply, pending, state}
   end
 
+  def handle_call({:allow, mock, owner_pid, pid}, _from, state) do
+    case ok_to_allow?(mock, pid, state.expectations, state.allowances) do
+      :ok ->
+        new_state =
+          put_in(state.allowances[{mock, pid}], owner_pid)
+
+        {:reply, {:ok, pid}, new_state}
+
+      {:error, error_type} ->
+        {:reply, {:error, error_type}, state}
+    end
+
+  end
+
   def handle_info({:DOWN, _, _, pid, _}, state) do
-    {:noreply, Map.delete(state, pid)}
+    {_, state} = pop_in(state.expectations[pid])
+    {:noreply, state}
   end
 
   # Helper functions
 
+  defp ok_to_allow?(mock, pid, expectations, allowances) do
+    has_expectation? = !!expectations[pid]
+    has_allowance? = !!allowances[{mock, pid}]
+
+    case {has_expectation?, has_allowance?} do
+      {true, false} -> {:error, :currently_allowed}
+      {false, true} -> {:error, :already_allowed}
+      {false, false} -> :ok
+    end
+  end
+
   defp maybe_add_and_monitor_pid(state, pid) do
-    case state do
+    case state.expectations do
       %{^pid => _} ->
         state
 
-      %{} ->
+      _ ->
         Process.monitor(pid)
-        Map.put(state, pid, %{})
+        put_in(state.expectations[pid], %{})
     end
   end
 
