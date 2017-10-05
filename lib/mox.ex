@@ -54,7 +54,8 @@ defmodule Mox do
 
         assert MyApp.CalcMock.add(2, 3) == 5
         assert MyApp.CalcMock.mult(2, 3) == 6
-      after
+
+        # At the end of the test
         verify!() # or verify!(MyApp.CalcMock)
       end
 
