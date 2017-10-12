@@ -6,7 +6,7 @@ defmodule Mox.Server do
   # Public API
 
   def start_link(_options) do
-    GenServer.start_link(__MODULE__, %{expectations: %{}, allowances: %{}}, name: __MODULE__)
+    GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
   def add_expectation(owner_pid, key, value) do
@@ -27,9 +27,13 @@ defmodule Mox.Server do
 
   # Callbacks
 
+  def init(:ok) do
+    {:ok, %{expectations: %{}, allowances: %{}}}
+  end
+
   def handle_call({:add_expectation, owner_pid, {mock, _, _} = key, expectation}, _from, state) do
     if other_pid = state.allowances[{mock, owner_pid}] do
-      {:reply, {:error, {:currently_allowed, owner_pid}}, state}
+      {:reply, {:error, {:currently_allowed, other_pid}}, state}
     else
       state = maybe_add_and_monitor_pid(state, owner_pid)
 
@@ -40,10 +44,6 @@ defmodule Mox.Server do
 
       {:reply, :ok, state}
     end
-  end
-
-  def handle_call({:get_expectation, owner_pid, key}, _from, state) do
-    {:reply, state.expectations[owner_pid][key], state}
   end
 
   def handle_call({:fetch_fun_to_dispatch, caller_pid, {mock, _, _} = key}, _from, state) do
