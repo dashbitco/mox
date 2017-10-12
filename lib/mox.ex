@@ -186,9 +186,8 @@ defmodule Mox do
   """
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 1 and is_function(code) do
-    key = mock_key!(mock, name, code)
     calls = List.duplicate(code, n)
-    Mox.Server.add_expectation(self(), key, {n, calls, nil})
+    add_expectation!(mock, name, code, {n, calls, nil})
     mock
   end
 
@@ -212,18 +211,33 @@ defmodule Mox do
   """
   def stub(mock, name, code)
       when is_atom(mock) and is_atom(name) and is_function(code) do
-    key = mock_key!(mock, name, code)
-    Mox.Server.add_expectation(self(), key, {0, [], code})
+    add_expectation!(mock, name, code, {0, [], code})
     mock
   end
 
-  defp mock_key!(mock, name, code) do
+  defp add_expectation!(mock, name, code, value) do
     validate_mock!(mock)
     arity = :erlang.fun_info(code)[:arity]
+    key = {mock, name, arity}
+
     unless function_exported?(mock, name, arity) do
       raise ArgumentError, "unknown function #{name}/#{arity} for mock #{inspect mock}"
     end
-    {mock, name, arity}
+
+    case Mox.Server.add_expectation(self(), key, value) do
+      :ok ->
+        :ok
+
+      {:error, {:currently_allowed, owner_pid}} ->
+        self = inspect(self())
+
+        raise ArgumentError, """
+        cannot add expectations/stubs to #{inspect mock} in the current process (#{self})
+        because the process has been allowed by #{inspect owner_pid}.
+
+        Note you cannot mix allowances with expectations/stubs
+        """
+    end
   end
 
   @doc """
@@ -238,14 +252,30 @@ defmodule Mox do
 
   `allow/2` will overwrite any previous calls to `allow/3`.
   """
-  def allow(mock, pid) do
+  def allow(mock, pid) when is_atom(mock) and pid == self() do
+    raise ArgumentError, "cannot allow the current process itself"
+  end
+
+  def allow(mock, pid) when is_atom(mock) and is_pid(pid) do
     case Mox.Server.allow(mock, self(), pid) do
-      {:ok, ^pid} ->
+      :ok ->
         mock
-      {:error, :already_allowed} ->
-        raise ArgumentError, "the process #{inspect pid} is being already allowed for #{inspect mock}"
-      {:error, :currently_allowed} ->
-        raise ArgumentError, "the process #{inspect pid} is currently allowed for #{inspect mock}"
+
+      {:error, {:already_allowed, owner_pid}} ->
+        raise ArgumentError, """
+        the process #{inspect pid} is already allowed to use #{inspect mock} by #{inspect owner_pid}.
+
+        If you are seeing this error message, it is because you are either
+        setting up allowances from different processes or your tests have
+        async: true and you found a race condition where two different tests
+        are allowing the same process
+        """
+
+      {:error, :expectations_defined} ->
+        raise ArgumentError, """
+        cannot allow #{inspect pid} to use #{inspect mock} because
+        the process has already defined its own expectations/stubs
+        """
     end
   end
 

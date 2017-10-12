@@ -27,15 +27,19 @@ defmodule Mox.Server do
 
   # Callbacks
 
-  def handle_call({:add_expectation, owner_pid, key, expectation}, _from, state) do
-    state = maybe_add_and_monitor_pid(state, owner_pid)
+  def handle_call({:add_expectation, owner_pid, {mock, _, _} = key, expectation}, _from, state) do
+    if other_pid = state.allowances[{mock, owner_pid}] do
+      {:reply, {:error, {:currently_allowed, owner_pid}}, state}
+    else
+      state = maybe_add_and_monitor_pid(state, owner_pid)
 
-    state =
-      update_in state.expectations[owner_pid], fn owned_expectations ->
-        Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
-      end
+      state =
+        update_in state.expectations[owner_pid], fn owned_expectations ->
+          Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
+        end
 
-    {:reply, :ok, state}
+      {:reply, :ok, state}
+    end
   end
 
   def handle_call({:get_expectation, owner_pid, key}, _from, state) do
@@ -74,17 +78,20 @@ defmodule Mox.Server do
   end
 
   def handle_call({:allow, mock, owner_pid, pid}, _from, state) do
-    case ok_to_allow?(mock, pid, state.expectations, state.allowances) do
-      :ok ->
-        new_state =
-          put_in(state.allowances[{mock, pid}], owner_pid)
+    %{allowances: allowances, expectations: expectations} = state
+    allowance = allowances[{mock, pid}]
 
-        {:reply, {:ok, pid}, new_state}
+    cond do
+      Map.has_key?(expectations, pid) ->
+        {:reply, {:error, :expectations_defined}, state}
 
-      {:error, error_type} ->
-        {:reply, {:error, error_type}, state}
+      allowance && allowance != owner_pid ->
+        {:reply, {:error, {:already_allowed, allowance}}, state}
+
+      true ->
+        state = put_in(state.allowances[{mock, pid}], owner_pid)
+        {:reply, :ok, state}
     end
-
   end
 
   def handle_info({:DOWN, _, _, pid, _}, state) do
@@ -93,17 +100,6 @@ defmodule Mox.Server do
   end
 
   # Helper functions
-
-  defp ok_to_allow?(mock, pid, expectations, allowances) do
-    has_expectation? = !!expectations[pid]
-    has_allowance? = !!allowances[{mock, pid}]
-
-    case {has_expectation?, has_allowance?} do
-      {true, false} -> {:error, :currently_allowed}
-      {false, true} -> {:error, :already_allowed}
-      {false, false} -> :ok
-    end
-  end
 
   defp maybe_add_and_monitor_pid(state, pid) do
     case state.expectations do

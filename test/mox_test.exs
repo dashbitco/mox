@@ -221,25 +221,63 @@ defmodule MoxTest do
       end
     end
 
-    test "raises if you try to allow already allowed process" do
-      child_pid = spawn fn -> nil end
-
-      CalcMock
-      |> allow(child_pid)
-
-      assert_raise ArgumentError, ~r"is being already allowed for CalcMock", fn ->
+    test "raises if you try to allow itself" do
+      assert_raise ArgumentError, "cannot allow the current process itself", fn ->
         CalcMock
-        |> allow(child_pid)
+        |> allow(self())
       end
     end
 
-    test "raises if you try to allow process with existing expectations set" do
-      CalcMock
-      |> expect(:add, fn _, _ -> :expected end)
+    test "raises if you try to allow already allowed process" do
+      {:ok, child_pid} = Task.start_link(fn -> Process.sleep(:infinity) end)
 
-      assert_raise ArgumentError, ~r"is currently allowed for CalcMock", fn ->
+      CalcMock
+      |> allow(child_pid)
+      |> allow(child_pid)
+
+      Task.async(fn ->
+        assert_raise ArgumentError, ~r"is already allowed to use CalcMock by", fn ->
+          CalcMock
+          |> allow(child_pid)
+        end
+      end)
+      |> Task.await()
+    end
+
+    test "raises if you try to allow process with existing expectations set" do
+      parent = self()
+
+      {:ok, pid} =
+        Task.start_link(fn ->
+          CalcMock
+          |> expect(:add, fn _, _ -> :expected end)
+          send(parent, :ready)
+          Process.sleep(:infinity)
+        end)
+
+      assert_receive :ready
+
+      assert_raise ArgumentError, ~r"the process has already defined its own expectations", fn ->
         CalcMock
-        |> allow(self())
+        |> allow(pid)
+      end
+    end
+
+    test "raises if you try to define expectations on allowed process" do
+      parent = self()
+
+      Task.start_link(fn ->
+        CalcMock
+        |> allow(parent)
+        send(parent, :ready)
+        Process.sleep(:infinity)
+      end)
+
+      assert_receive :ready
+
+      assert_raise ArgumentError, ~r"because the process has been allowed by", fn ->
+        CalcMock
+        |> expect(:add, fn _, _ -> :expected end)
       end
     end
   end
