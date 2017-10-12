@@ -227,6 +227,29 @@ defmodule Mox do
   end
 
   @doc """
+  Allows other processes to share expectations and stubs
+  defined by current process.
+
+  ## Examples
+
+  To allow `child_pid` to call any stubs or expectations defined for `MyMock`:
+
+      allow(MyMock, child_pid)
+
+  `allow/2` will overwrite any previous calls to `allow/3`.
+  """
+  def allow(mock, pid) do
+    case Mox.Server.allow(mock, self(), pid) do
+      {:ok, ^pid} ->
+        mock
+      {:error, :already_allowed} ->
+        raise ArgumentError, "the process #{inspect pid} is being already allowed for #{inspect mock}"
+      {:error, :currently_allowed} ->
+        raise ArgumentError, "the process #{inspect pid} is currently allowed for #{inspect mock}"
+    end
+  end
+
+  @doc """
   Verifies that all expectations set by the current process
   have been called.
   """

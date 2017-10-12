@@ -190,4 +190,57 @@ defmodule MoxTest do
       end
     end
   end
+
+  describe "allow/2" do
+    test "allows different processes to share mocks" do
+      test_pid = self()
+
+      child_pid = spawn fn ->
+        receive do
+          :call_mock ->
+            add_result = CalcMock.add(1, 1)
+            mult_result = CalcMock.mult(1, 1)
+            send(test_pid, {:verify, add_result, mult_result})
+        end
+      end
+
+      CalcMock
+      |> expect(:add, fn _, _ -> :expected end)
+      |> stub(:mult, fn _, _ -> :stubbed end)
+      |> allow(child_pid)
+
+      send(child_pid, :call_mock)
+
+      receive do
+        {:verify, add_result, mult_result} ->
+          assert add_result == :expected
+          assert mult_result == :stubbed
+          verify!()
+      after
+        1000 -> verify!()
+      end
+    end
+
+    test "raises if you try to allow already allowed process" do
+      child_pid = spawn fn -> nil end
+
+      CalcMock
+      |> allow(child_pid)
+
+      assert_raise ArgumentError, ~r"is being already allowed for CalcMock", fn ->
+        CalcMock
+        |> allow(child_pid)
+      end
+    end
+
+    test "raises if you try to allow process with existing expectations set" do
+      CalcMock
+      |> expect(:add, fn _, _ -> :expected end)
+
+      assert_raise ArgumentError, ~r"is currently allowed for CalcMock", fn ->
+        CalcMock
+        |> allow(self())
+      end
+    end
+  end
 end
