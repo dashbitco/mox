@@ -210,61 +210,82 @@ defmodule MoxTest do
     end
   end
 
-  describe "allow/2" do
-    test "allows different processes to share mocks" do
+  describe "allow/3" do
+    setup :verify_on_exit!
+
+    test "allows different processes to share mocks from parent process" do
       parent_pid = self()
 
-      {:ok, child_pid} = Task.start_link fn ->
-        receive do
-          :call_mock ->
-            add_result = CalcMock.add(1, 1)
-            mult_result = CalcMock.mult(1, 1)
-            send(parent_pid, {:verify, add_result, mult_result})
-        end
-      end
+      {:ok, child_pid} =
+        Task.start_link(fn ->
+          assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+
+          receive do
+            :call_mock ->
+              add_result = CalcMock.add(1, 1)
+              mult_result = CalcMock.mult(1, 1)
+              send(parent_pid, {:verify, add_result, mult_result})
+          end
+        end)
 
       CalcMock
       |> expect(:add, fn _, _ -> :expected end)
       |> stub(:mult, fn _, _ -> :stubbed end)
-      |> allow(child_pid)
+      |> allow(self(), child_pid)
 
       send(child_pid, :call_mock)
 
-      receive do
-        {:verify, add_result, mult_result} ->
-          assert add_result == :expected
-          assert mult_result == :stubbed
-          verify!()
-      after
-        1000 -> verify!()
-      end
+      assert_receive {:verify, add_result, mult_result}
+      assert add_result == :expected
+      assert mult_result == :stubbed
+    end
+
+    test "allows different processes to share mocks from child process" do
+      parent_pid = self()
+
+      CalcMock
+      |> expect(:add, fn _, _ -> :expected end)
+      |> stub(:mult, fn _, _ -> :stubbed end)
+
+      Task.async(fn ->
+        assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+
+        CalcMock
+        |> allow(parent_pid, self())
+
+        assert CalcMock.add(1, 1) == :expected
+        assert CalcMock.mult(1, 1) == :stubbed
+      end) |> Task.await()
     end
 
     test "allowances are transitive" do
       parent_pid = self()
 
-      {:ok, child_pid} = Task.start_link fn ->
-        receive do
-          :call_mock ->
-            add_result = CalcMock.add(1, 1)
-            mult_result = CalcMock.mult(1, 1)
-            send(parent_pid, {:verify, add_result, mult_result})
-        end
-      end
+      {:ok, child_pid} =
+        Task.start_link(fn ->
+          assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+          receive do
+            :call_mock ->
+              add_result = CalcMock.add(1, 1)
+              mult_result = CalcMock.mult(1, 1)
+              send(parent_pid, {:verify, add_result, mult_result})
+          end
+        end)
 
-      {:ok, transitive_pid} = Task.start_link fn ->
-        receive do
-          :allow_mock ->
-            CalcMock
-            |> allow(child_pid)
-            send(child_pid, :call_mock)
-        end
-      end
+      {:ok, transitive_pid} =
+        Task.start_link(fn ->
+          receive do
+            :allow_mock ->
+              CalcMock
+              |> allow(self(), child_pid)
+              send(child_pid, :call_mock)
+          end
+        end)
 
       CalcMock
       |> expect(:add, fn _, _ -> :expected end)
       |> stub(:mult, fn _, _ -> :stubbed end)
-      |> allow(transitive_pid)
+      |> allow(self(), transitive_pid)
 
       send(transitive_pid, :allow_mock)
 
@@ -281,12 +302,13 @@ defmodule MoxTest do
     test "allowances are reclaimed if the owner process dies" do
       parent_pid = self()
 
-      task = Task.async(fn ->
-        CalcMock
-        |> expect(:add, fn _, _ -> :expected end)
-        |> stub(:mult, fn _, _ -> :stubbed end)
-        |> allow(parent_pid)
-      end)
+      task =
+        Task.async(fn ->
+          CalcMock
+          |> expect(:add, fn _, _ -> :expected end)
+          |> stub(:mult, fn _, _ -> :stubbed end)
+          |> allow(self(), parent_pid)
+        end)
 
       Task.await(task)
 
@@ -295,15 +317,15 @@ defmodule MoxTest do
       end
 
       CalcMock
-      |> expect(:add, 2, fn x, y -> x + y end)
+      |> expect(:add, 1, fn x, y -> x + y end)
 
       assert CalcMock.add(1, 1) == 2
     end
 
     test "raises if you try to allow itself" do
-      assert_raise ArgumentError, "cannot allow the current process itself", fn ->
+      assert_raise ArgumentError, "owner_pid and allowed_pid must be different", fn ->
         CalcMock
-        |> allow(self())
+        |> allow(self(), self())
       end
     end
 
@@ -311,13 +333,13 @@ defmodule MoxTest do
       {:ok, child_pid} = Task.start_link(fn -> Process.sleep(:infinity) end)
 
       CalcMock
-      |> allow(child_pid)
-      |> allow(child_pid)
+      |> allow(self(), child_pid)
+      |> allow(self(), child_pid)
 
       Task.async(fn ->
-        assert_raise ArgumentError, ~r"is already allowed to use CalcMock by", fn ->
+        assert_raise ArgumentError, ~r"it is already allowed by", fn ->
           CalcMock
-          |> allow(child_pid)
+          |> allow(self(), child_pid)
         end
       end)
       |> Task.await()
@@ -339,7 +361,7 @@ defmodule MoxTest do
 
       assert_raise ArgumentError, ~r"the process has already defined its own expectations", fn ->
         CalcMock
-        |> allow(pid)
+        |> allow(self(), pid)
       end
     end
 
@@ -348,7 +370,7 @@ defmodule MoxTest do
 
       Task.start_link(fn ->
         CalcMock
-        |> allow(parent_pid)
+        |> allow(self(), parent_pid)
 
         send(parent_pid, :ready)
         Process.sleep(:infinity)

@@ -47,6 +47,9 @@ defmodule Mox do
 
       import Mox
 
+      # Make sure mocks are verified when the test exits
+      setup :verify_on_exit
+
       test "invokes add and mult" do
         MyApp.CalcMock
         |> expect(:add, fn x, y -> x + y end)
@@ -54,15 +57,10 @@ defmodule Mox do
 
         assert MyApp.CalcMock.add(2, 3) == 5
         assert MyApp.CalcMock.mult(2, 3) == 6
-
-        # At the end of the test
-        verify!() # or verify!(MyApp.CalcMock)
       end
 
   All expectations are defined based on the current process. This
   means multiple tests using the same mock can still run concurrently.
-  It also means verification must be done in the test process itself
-  and cannot be done on `on_exit` callbacks.
 
   ## Compile-time requirements
 
@@ -90,23 +88,25 @@ defmodule Mox do
 
   ## Multi-process collaboration
 
-  Mox currently does not support multi-process collaboration. If you set
-  expectations on the current process and invoke the mock on another process,
-  the expectation will not be available.
+  Mox supports multi-process collaboration via an explicit allowances
+  where a child process is allowed to use the expectations and stubs
+  defined in the parent process while still being safe for async tests.
 
-  In cases where collaboration between multiple processes is required, you
-  can skip Mox altogether and directly define a module with the behaviour
-  to be tested via multiple processes:
+      test "invokes add and mult from a task" do
+        MyApp.CalcMock
+        |> expect(:add, fn x, y -> x + y end)
+        |> expect(:mult, fn x, y -> x * y end)
 
-      defmodule MyApp.YetAnotherCalcMock do
-        @behaviour MyApp.Calculator
-        def add(..., ...), do: ...
-        def mult(..., ...), do: ...
+        parent_pid = self()
+
+        Task.async(fn ->
+          MyApp.CalcMock |> allow(parent_pid, self())
+          assert MyApp.CalcMock.add(2, 3) == 5
+          assert MyApp.CalcMock.mult(2, 3) == 6
+        end)
+        |> Task.await
       end
 
-  After all, the main motivation behind Mox is to provide concurrent mocks
-  defined by explicit contracts. If concurrency is not an option, you can still
-  leverage plain Elixir modules to implement those contracts.
   """
 
   defmodule UnexpectedCallError do
@@ -229,10 +229,10 @@ defmodule Mox do
         :ok
 
       {:error, {:currently_allowed, owner_pid}} ->
-        self = inspect(self())
+        inspected = inspect(self())
 
         raise ArgumentError, """
-        cannot add expectations/stubs to #{inspect mock} in the current process (#{self})
+        cannot add expectations/stubs to #{inspect mock} in the current process (#{inspected})
         because the process has been allowed by #{inspect owner_pid}.
 
         Note you cannot mix allowances with expectations/stubs
@@ -242,28 +242,29 @@ defmodule Mox do
 
   @doc """
   Allows other processes to share expectations and stubs
-  defined by current process.
+  defined by owner process.
 
   ## Examples
 
   To allow `child_pid` to call any stubs or expectations defined for `MyMock`:
 
-      allow(MyMock, child_pid)
+      allow(MyMock, self(), child_pid)
 
-  `allow/2` will overwrite any previous calls to `allow/3`.
   """
-  def allow(mock, pid) when is_atom(mock) and pid == self() do
-    raise ArgumentError, "cannot allow the current process itself"
+  def allow(mock, owner_pid, allowed_pid) when owner_pid == allowed_pid do
+    raise ArgumentError, "owner_pid and allowed_pid must be different"
   end
 
-  def allow(mock, pid) when is_atom(mock) and is_pid(pid) do
-    case Mox.Server.allow(mock, self(), pid) do
+  def allow(mock, owner_pid, allowed_pid)
+      when is_atom(mock) and is_pid(owner_pid) and is_pid(allowed_pid) do
+    case Mox.Server.allow(mock, owner_pid, allowed_pid) do
       :ok ->
         mock
 
-      {:error, {:already_allowed, owner_pid}} ->
+      {:error, {:already_allowed, actual_pid}} ->
         raise ArgumentError, """
-        the process #{inspect pid} is already allowed to use #{inspect mock} by #{inspect owner_pid}.
+        cannot allow #{inspect allowed_pid} to use #{inspect mock} from #{inspect owner_pid}
+        because it is already allowed by #{inspect actual_pid}.
 
         If you are seeing this error message, it is because you are either
         setting up allowances from different processes or your tests have
@@ -273,8 +274,8 @@ defmodule Mox do
 
       {:error, :expectations_defined} ->
         raise ArgumentError, """
-        cannot allow #{inspect pid} to use #{inspect mock} because
-        the process has already defined its own expectations/stubs
+        cannot allow #{inspect allowed_pid} to use #{inspect mock} from #{inspect owner_pid}
+        because the process has already defined its own expectations/stubs
         """
     end
   end
