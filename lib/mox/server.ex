@@ -91,7 +91,7 @@ defmodule Mox.Server do
 
       true ->
         state = maybe_add_and_monitor_pid(state, :expectations, owner_pid)
-        state = put_in(state.deps[owner_pid], &[{pid, mock} | &1])
+        state = update_in(state.deps[owner_pid], &[{pid, mock} | &1])
 
         state = maybe_add_and_monitor_pid(state, :allowances, pid)
         state = put_in(state.allowances[pid][mock], owner_pid)
@@ -101,7 +101,15 @@ defmodule Mox.Server do
   end
 
   def handle_info({:DOWN, _, _, pid, _}, state) do
+    {pending, state} = pop_in(state.deps[pid])
     {_, state} = pop_in(state.expectations[pid])
+    {_, state} = pop_in(state.allowances[pid])
+
+    state =
+      Enum.reduce(pending || [], state, fn {pid, mock}, acc ->
+        acc.allowances[pid][mock] |> pop_in() |> elem(1)
+      end)
+
     {:noreply, state}
   end
 
@@ -110,7 +118,10 @@ defmodule Mox.Server do
   defp maybe_add_and_monitor_pid(state, key, pid) do
     case state.deps do
       %{^pid => _} ->
-        state
+        case state do
+          %{^key => %{^pid => _}} -> state
+          _ -> put_in(state[key][pid], %{})
+        end
 
       _ ->
         Process.monitor(pid)

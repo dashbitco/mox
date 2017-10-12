@@ -193,14 +193,14 @@ defmodule MoxTest do
 
   describe "allow/2" do
     test "allows different processes to share mocks" do
-      test_pid = self()
+      parent_pid = self()
 
       {:ok, child_pid} = Task.start_link fn ->
         receive do
           :call_mock ->
             add_result = CalcMock.add(1, 1)
             mult_result = CalcMock.mult(1, 1)
-            send(test_pid, {:verify, add_result, mult_result})
+            send(parent_pid, {:verify, add_result, mult_result})
         end
       end
 
@@ -222,14 +222,14 @@ defmodule MoxTest do
     end
 
     test "allowances are transitive" do
-      test_pid = self()
+      parent_pid = self()
 
       {:ok, child_pid} = Task.start_link fn ->
         receive do
           :call_mock ->
             add_result = CalcMock.add(1, 1)
             mult_result = CalcMock.mult(1, 1)
-            send(test_pid, {:verify, add_result, mult_result})
+            send(parent_pid, {:verify, add_result, mult_result})
         end
       end
 
@@ -259,6 +259,28 @@ defmodule MoxTest do
       end
     end
 
+    test "allowances are reclaimed if the owner process dies" do
+      parent_pid = self()
+
+      task = Task.async(fn ->
+        CalcMock
+        |> expect(:add, fn _, _ -> :expected end)
+        |> stub(:mult, fn _, _ -> :stubbed end)
+        |> allow(parent_pid)
+      end)
+
+      Task.await(task)
+
+      assert_raise Mox.UnexpectedCallError, fn ->
+        CalcMock.add(1, 1)
+      end
+
+      CalcMock
+      |> expect(:add, 2, fn x, y -> x + y end)
+
+      assert CalcMock.add(1, 1) == 2
+    end
+
     test "raises if you try to allow itself" do
       assert_raise ArgumentError, "cannot allow the current process itself", fn ->
         CalcMock
@@ -283,13 +305,14 @@ defmodule MoxTest do
     end
 
     test "raises if you try to allow process with existing expectations set" do
-      parent = self()
+      parent_pid = self()
 
       {:ok, pid} =
         Task.start_link(fn ->
           CalcMock
           |> expect(:add, fn _, _ -> :expected end)
-          send(parent, :ready)
+
+          send(parent_pid, :ready)
           Process.sleep(:infinity)
         end)
 
@@ -302,12 +325,13 @@ defmodule MoxTest do
     end
 
     test "raises if you try to define expectations on allowed process" do
-      parent = self()
+      parent_pid = self()
 
       Task.start_link(fn ->
         CalcMock
-        |> allow(parent)
-        send(parent, :ready)
+        |> allow(parent_pid)
+
+        send(parent_pid, :ready)
         Process.sleep(:infinity)
       end)
 
