@@ -251,7 +251,7 @@ defmodule Mox do
       allow(MyMock, self(), child_pid)
 
   """
-  def allow(mock, owner_pid, allowed_pid) when owner_pid == allowed_pid do
+  def allow(_mock, owner_pid, allowed_pid) when owner_pid == allowed_pid do
     raise ArgumentError, "owner_pid and allowed_pid must be different"
   end
 
