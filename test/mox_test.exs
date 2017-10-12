@@ -133,6 +133,16 @@ defmodule MoxTest do
     end
   end
 
+  describe "verify_on_exit!/0" do
+    setup :verify_on_exit!
+
+    test "verifies all mocks for the current process on exit" do
+      verify!()
+      expect(CalcMock, :add, fn x, y -> x + y end)
+      assert CalcMock.add(2, 3) == 5
+    end
+  end
+
   describe "stub/3" do
     test "allows repeated invocations" do
       stub(CalcMock, :add, fn x, y -> x + y end)

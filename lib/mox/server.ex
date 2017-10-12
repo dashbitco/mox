@@ -2,6 +2,7 @@ defmodule Mox.Server do
   @moduledoc false
 
   use GenServer
+  @timeout 30000
 
   # Public API
 
@@ -10,19 +11,27 @@ defmodule Mox.Server do
   end
 
   def add_expectation(owner_pid, key, value) do
-    GenServer.call(__MODULE__, {:add_expectation, owner_pid, key, value})
+    GenServer.call(__MODULE__, {:add_expectation, owner_pid, key, value}, @timeout)
   end
 
   def fetch_fun_to_dispatch(caller_pid, key) do
-    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, caller_pid, key})
+    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, caller_pid, key}, @timeout)
   end
 
-  def pending_expectations(owner_pid, for) do
-    GenServer.call(__MODULE__, {:pending_expectations, owner_pid, for})
+  def verify(owner_pid, for) do
+    GenServer.call(__MODULE__, {:verify, owner_pid, for}, @timeout)
+  end
+
+  def verify_on_exit(pid) do
+    GenServer.call(__MODULE__, {:verify_on_exit, pid}, @timeout)
   end
 
   def allow(mock, owner_pid, pid) do
-    GenServer.call(__MODULE__, {:allow, mock, owner_pid, pid})
+    GenServer.call(__MODULE__, {:allow, mock, owner_pid, pid}, @timeout)
+  end
+
+  def exit(pid) do
+    GenServer.cast(__MODULE__, {:exit, pid})
   end
 
   # Callbacks
@@ -35,12 +44,12 @@ defmodule Mox.Server do
     if allowance = state.allowances[owner_pid][mock] do
       {:reply, {:error, {:currently_allowed, allowance}}, state}
     else
-      state = maybe_add_and_monitor_pid(state, :expectations, owner_pid)
+      state = maybe_add_and_monitor_pid(state, owner_pid)
 
       state =
-        update_in state.expectations[owner_pid], fn owned_expectations ->
+        update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
           Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
-        end
+        end)
 
       {:reply, :ok, state}
     end
@@ -65,7 +74,7 @@ defmodule Mox.Server do
     end
   end
 
-  def handle_call({:pending_expectations, owner_pid, mock}, _from, state) do
+  def handle_call({:verify, owner_pid, mock}, _from, state) do
     expectations = state.expectations[owner_pid] || %{}
 
     pending =
@@ -75,6 +84,11 @@ defmodule Mox.Server do
       end
 
     {:reply, pending, state}
+  end
+
+  def handle_call({:verify_on_exit, pid}, _from, state) do
+    state = maybe_add_and_monitor_pid(state, pid, :EXIT, fn {_, deps} -> {:EXIT, deps} end)
+    {:reply, :ok, state}
   end
 
   def handle_call({:allow, mock, owner_pid, pid}, _from, state) do
@@ -90,43 +104,59 @@ defmodule Mox.Server do
         {:reply, {:error, {:already_allowed, allowance}}, state}
 
       true ->
-        state = maybe_add_and_monitor_pid(state, :expectations, owner_pid)
-        state = update_in(state.deps[owner_pid], &[{pid, mock} | &1])
+        state =
+          maybe_add_and_monitor_pid(state, owner_pid, :DOWN, fn {on, deps} ->
+            {on, [{pid, mock} | deps]}
+          end)
 
-        state = maybe_add_and_monitor_pid(state, :allowances, pid)
-        state = put_in(state.allowances[pid][mock], owner_pid)
-
+        state = put_in(state, [:allowances, pid_map(pid), mock], owner_pid)
         {:reply, :ok, state}
     end
   end
 
+  def handle_cast({:exit, pid}, state) do
+    {:noreply, down(state, pid)}
+  end
+
   def handle_info({:DOWN, _, _, pid, _}, state) do
-    {pending, state} = pop_in(state.deps[pid])
-    {_, state} = pop_in(state.expectations[pid])
-    {_, state} = pop_in(state.allowances[pid])
-
-    state =
-      Enum.reduce(pending || [], state, fn {pid, mock}, acc ->
-        acc.allowances[pid][mock] |> pop_in() |> elem(1)
-      end)
-
-    {:noreply, state}
+    case state.deps do
+      %{^pid => {:DOWN, _}} -> {:noreply, down(state, pid)}
+      %{} -> {:noreply, state}
+    end
   end
 
   # Helper functions
 
-  defp maybe_add_and_monitor_pid(state, key, pid) do
+  defp down(state, pid) do
+    {{_, deps}, state} = pop_in(state.deps[pid])
+    {_, state} = pop_in(state.expectations[pid])
+    {_, state} = pop_in(state.allowances[pid])
+
+    Enum.reduce(deps, state, fn {pid, mock}, acc ->
+      acc.allowances[pid][mock] |> pop_in() |> elem(1)
+    end)
+  end
+
+  defp pid_map(pid) do
+    Access.key(pid, %{})
+  end
+
+  defp maybe_add_and_monitor_pid(state, pid) do
+    maybe_add_and_monitor_pid(state, pid, :DOWN, nil)
+  end
+
+  defp maybe_add_and_monitor_pid(state, pid, on, fun) do
     case state.deps do
-      %{^pid => _} ->
-        case state do
-          %{^key => %{^pid => _}} -> state
-          _ -> put_in(state[key][pid], %{})
+      %{^pid => entry} ->
+        if fun do
+          put_in(state.deps[pid], fun.(entry))
+        else
+          state
         end
 
       _ ->
         Process.monitor(pid)
-        state = put_in(state.deps[pid], [])
-        state = put_in(state[key][pid], %{})
+        state = put_in(state.deps[pid], {on, []})
         state
     end
   end

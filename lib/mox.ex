@@ -280,11 +280,23 @@ defmodule Mox do
   end
 
   @doc """
+  Verifies the current process after it exits.
+  """
+  def verify_on_exit!(_context \\ %{}) do
+    pid = self()
+    Mox.Server.verify_on_exit(pid)
+    ExUnit.Callbacks.on_exit(Mox, fn ->
+      verify_mock_or_all!(pid, :all)
+      Mox.Server.exit(pid)
+    end)
+  end
+
+  @doc """
   Verifies that all expectations set by the current process
   have been called.
   """
   def verify! do
-    verify_mock_or_all!(:all)
+    verify_mock_or_all!(self(), :all)
   end
 
   @doc """
@@ -292,11 +304,11 @@ defmodule Mox do
   """
   def verify!(mock) do
     validate_mock!(mock)
-    verify_mock_or_all!(mock)
+    verify_mock_or_all!(self(), mock)
   end
 
-  defp verify_mock_or_all!(mock) do
-    pending = Mox.Server.pending_expectations(self(), mock)
+  defp verify_mock_or_all!(pid, mock) do
+    pending = Mox.Server.verify(pid, mock)
 
     messages =
       for {{module, name, arity}, total, pending} <- pending do
@@ -306,7 +318,7 @@ defmodule Mox do
       end
 
     if messages != [] do
-      raise VerificationError, "error while verifying mocks:\n\n#{Enum.join(messages, "\n")}"
+      raise VerificationError, "error while verifying mocks for #{inspect pid}:\n\n" <> Enum.join(messages, "\n")
     end
 
     :ok
