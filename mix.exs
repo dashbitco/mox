@@ -1,13 +1,13 @@
 defmodule Mox.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
 
   def project do
     [
       app: :mox,
       version: @version,
-      elixir: "~> 1.5",
+      elixir: "~> 1.4",
       start_permanent: Mix.env == :prod,
       name: "Mox",
       description: "Mocks and explicit contracts for Elixir",
