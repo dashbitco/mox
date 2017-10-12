@@ -136,7 +136,16 @@ defmodule MoxTest do
   describe "verify_on_exit!/0" do
     setup :verify_on_exit!
 
+    test "verifies all mocks even if none is used" do
+      :ok
+    end
+
     test "verifies all mocks for the current process on exit" do
+      expect(CalcMock, :add, fn x, y -> x + y end)
+      assert CalcMock.add(2, 3) == 5
+    end
+
+    test "verifies all mocks for the current process on exit with previous verification" do
       verify!()
       expect(CalcMock, :add, fn x, y -> x + y end)
       assert CalcMock.add(2, 3) == 5
