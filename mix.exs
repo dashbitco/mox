@@ -19,6 +19,7 @@ defmodule Mox.MixProject do
 
   def application do
     [
+      extra_applications: [:logger],
       mod: {Mox.Application, []}
     ]
   end

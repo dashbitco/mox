@@ -195,7 +195,7 @@ defmodule MoxTest do
     test "allows different processes to share mocks" do
       test_pid = self()
 
-      child_pid = spawn fn ->
+      {:ok, child_pid} = Task.start_link fn ->
         receive do
           :call_mock ->
             add_result = CalcMock.add(1, 1)
@@ -210,6 +210,44 @@ defmodule MoxTest do
       |> allow(child_pid)
 
       send(child_pid, :call_mock)
+
+      receive do
+        {:verify, add_result, mult_result} ->
+          assert add_result == :expected
+          assert mult_result == :stubbed
+          verify!()
+      after
+        1000 -> verify!()
+      end
+    end
+
+    test "allowances are transitive" do
+      test_pid = self()
+
+      {:ok, child_pid} = Task.start_link fn ->
+        receive do
+          :call_mock ->
+            add_result = CalcMock.add(1, 1)
+            mult_result = CalcMock.mult(1, 1)
+            send(test_pid, {:verify, add_result, mult_result})
+        end
+      end
+
+      {:ok, transitive_pid} = Task.start_link fn ->
+        receive do
+          :allow_mock ->
+            CalcMock
+            |> allow(child_pid)
+            send(child_pid, :call_mock)
+        end
+      end
+
+      CalcMock
+      |> expect(:add, fn _, _ -> :expected end)
+      |> stub(:mult, fn _, _ -> :stubbed end)
+      |> allow(transitive_pid)
+
+      send(transitive_pid, :allow_mock)
 
       receive do
         {:verify, add_result, mult_result} ->

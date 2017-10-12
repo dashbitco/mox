@@ -28,14 +28,14 @@ defmodule Mox.Server do
   # Callbacks
 
   def init(:ok) do
-    {:ok, %{expectations: %{}, allowances: %{}}}
+    {:ok, %{expectations: %{}, allowances: %{}, deps: %{}}}
   end
 
   def handle_call({:add_expectation, owner_pid, {mock, _, _} = key, expectation}, _from, state) do
-    if other_pid = state.allowances[{mock, owner_pid}] do
-      {:reply, {:error, {:currently_allowed, other_pid}}, state}
+    if allowance = state.allowances[owner_pid][mock] do
+      {:reply, {:error, {:currently_allowed, allowance}}, state}
     else
-      state = maybe_add_and_monitor_pid(state, owner_pid)
+      state = maybe_add_and_monitor_pid(state, :expectations, owner_pid)
 
       state =
         update_in state.expectations[owner_pid], fn owned_expectations ->
@@ -47,7 +47,7 @@ defmodule Mox.Server do
   end
 
   def handle_call({:fetch_fun_to_dispatch, caller_pid, {mock, _, _} = key}, _from, state) do
-    owner_pid = Map.get(state.allowances, {mock, caller_pid}, caller_pid)
+    owner_pid = state.allowances[caller_pid][mock] || caller_pid
 
     case state.expectations[owner_pid][key] do
       nil ->
@@ -66,7 +66,7 @@ defmodule Mox.Server do
   end
 
   def handle_call({:pending_expectations, owner_pid, mock}, _from, state) do
-    expectations = Map.get(state.expectations, owner_pid, %{})
+    expectations = state.expectations[owner_pid] || %{}
 
     pending =
       for {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expectations,
@@ -79,7 +79,8 @@ defmodule Mox.Server do
 
   def handle_call({:allow, mock, owner_pid, pid}, _from, state) do
     %{allowances: allowances, expectations: expectations} = state
-    allowance = allowances[{mock, pid}]
+    owner_pid = state.allowances[owner_pid][mock] || owner_pid
+    allowance = allowances[pid][mock]
 
     cond do
       Map.has_key?(expectations, pid) ->
@@ -89,7 +90,12 @@ defmodule Mox.Server do
         {:reply, {:error, {:already_allowed, allowance}}, state}
 
       true ->
-        state = put_in(state.allowances[{mock, pid}], owner_pid)
+        state = maybe_add_and_monitor_pid(state, :expectations, owner_pid)
+        state = put_in(state.deps[owner_pid], &[{pid, mock} | &1])
+
+        state = maybe_add_and_monitor_pid(state, :allowances, pid)
+        state = put_in(state.allowances[pid][mock], owner_pid)
+
         {:reply, :ok, state}
     end
   end
@@ -101,14 +107,16 @@ defmodule Mox.Server do
 
   # Helper functions
 
-  defp maybe_add_and_monitor_pid(state, pid) do
-    case state.expectations do
+  defp maybe_add_and_monitor_pid(state, key, pid) do
+    case state.deps do
       %{^pid => _} ->
         state
 
       _ ->
         Process.monitor(pid)
-        put_in(state.expectations[pid], %{})
+        state = put_in(state.deps[pid], [])
+        state = put_in(state[key][pid], %{})
+        state
     end
   end
 
