@@ -132,7 +132,7 @@ defmodule Mox do
 
   defp validate_behaviour!(behaviour) do
     cond do
-      not Code.ensure_loaded?(behaviour) ->
+      not Code.ensure_compiled?(behaviour) ->
         raise ArgumentError,
               "module #{inspect behaviour} is not available, please pass an existing module to :for"
 
@@ -327,7 +327,7 @@ defmodule Mox do
 
   defp validate_mock!(mock) do
     cond do
-      not Code.ensure_loaded?(mock) ->
+      not Code.ensure_compiled?(mock) ->
         raise ArgumentError, "module #{inspect mock} is not available"
 
       not function_exported?(mock, :__mock_for__, 0) ->
