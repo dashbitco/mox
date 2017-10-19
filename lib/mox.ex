@@ -48,7 +48,7 @@ defmodule Mox do
       import Mox
 
       # Make sure mocks are verified when the test exits
-      setup :verify_on_exit
+      setup :verify_on_exit!
 
       test "invokes add and mult" do
         MyApp.CalcMock
