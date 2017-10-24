@@ -198,7 +198,7 @@ defmodule Mox do
   Opposite to expectations, stubs are never verified.
 
   If expectations and stubs are defined for the same function
-  and arity, the stub is invoked only after all expecations are
+  and arity, the stub is invoked only after all expectations are
   fulfilled.
 
   ## Examples
