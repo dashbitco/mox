@@ -9,7 +9,13 @@ defmodule MoxTest do
     @callback mult(integer(), integer()) :: integer()
   end
 
+  defmodule CalculatorNoBehaviour do
+    def add(_a, _b), do: raise "should not be called"
+    def mult(_a, _b), do: raise "should not be called"
+  end
+
   defmock CalcMock, for: Calculator
+  defmock_without_behaviour CalcMockNoBehaviour, for: CalculatorNoBehaviour
 
   describe "defmock/2" do
     test "raises for unknown module" do
@@ -21,6 +27,14 @@ defmodule MoxTest do
     test "raises for non behaviour" do
       assert_raise ArgumentError, ~r"module String is not a behaviour", fn ->
         defmock MyMock, for: String
+      end
+    end
+  end
+
+  describe "defmock_without_behaviour/2" do
+    test "raises for unknown module" do
+      assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
+        defmock_without_behaviour MyMock, for: Unknown
       end
     end
   end
@@ -63,6 +77,12 @@ defmodule MoxTest do
 
       assert_raise ArgumentError, ~r"unknown function add/3 for mock CalcMock", fn ->
         expect(CalcMock, :add, fn x, y, z -> x + y + z end)
+      end
+    end
+
+    test "raises if function is not in module" do
+      assert_raise ArgumentError, ~r"unknown function add/3 for mock CalcMock", fn ->
+        expect(CalcMockNoBehaviour, :add, fn x, y, z -> x + y + z end)
       end
     end
 

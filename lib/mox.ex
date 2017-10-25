@@ -125,18 +125,35 @@ defmodule Mox do
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
     behaviour = options[:for] || raise ArgumentError, ":for option is required on defmock"
-    validate_behaviour!(behaviour)
-    define_mock_module(name, behaviour)
+    validate_module!(behaviour)
+    define_mock_module(name, behaviour, behaviour.behaviour_info(:callbacks))
     name
   end
 
-  defp validate_behaviour!(behaviour) do
+  @doc """
+  Defines a mock with the given name `:for` the given module.
+
+  Please note that this is not recommanded and you should always define a proper contract for the
+  module you want to use as a mock.
+
+      Mox.defmock_without_behaviour MyMock, for: MyModule
+
+  """
+  def defmock_without_behaviour(name, options) do
+    module = options[:for] || raise ArgumentError, ":for option is required on defmock"
+    validate_module!(module, behaviour?: false)
+    define_mock_module(name, module, module.__info__(:functions))
+    name
+  end
+
+  defp validate_module!(behaviour, options \\ []) do
+    behaviour? = Keyword.get(options, :behaviour?, true)
     cond do
       not Code.ensure_compiled?(behaviour) ->
         raise ArgumentError,
               "module #{inspect behaviour} is not available, please pass an existing module to :for"
 
-      not function_exported?(behaviour, :behaviour_info, 1) ->
+      behaviour? and not function_exported?(behaviour, :behaviour_info, 1) ->
         raise ArgumentError,
               "module #{inspect behaviour} is not a behaviour, please pass a behaviour to :for"
 
@@ -145,9 +162,9 @@ defmodule Mox do
     end
   end
 
-  defp define_mock_module(name, behaviour) do
+  defp define_mock_module(name, behaviour, functions) do
     funs =
-      for {fun, arity} <- behaviour.behaviour_info(:callbacks) do
+      for {fun, arity} <- functions do
         args = 0..arity |> Enum.to_list |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
         quote do
           def unquote(fun)(unquote_splicing(args)) do
