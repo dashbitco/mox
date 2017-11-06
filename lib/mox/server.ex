@@ -34,13 +34,21 @@ defmodule Mox.Server do
     GenServer.cast(__MODULE__, {:exit, pid})
   end
 
+  def set_mode(mode) do
+    GenServer.call(__MODULE__, {:set_mode, mode})
+  end
+
   # Callbacks
 
   def init(:ok) do
-    {:ok, %{expectations: %{}, allowances: %{}, deps: %{}}}
+    {:ok, %{expectations: %{}, allowances: %{}, deps: %{}, mode: :private, global_owner_pid: nil}}
   end
 
-  def handle_call({:add_expectation, owner_pid, {mock, _, _} = key, expectation}, _from, state) do
+  def handle_call(
+        {:add_expectation, owner_pid, {mock, _, _} = key, expectation},
+        _from,
+        %{mode: :private} = state
+      ) do
     if allowance = state.allowances[owner_pid][mock] do
       {:reply, {:error, {:currently_allowed, allowance}}, state}
     else
@@ -55,7 +63,26 @@ defmodule Mox.Server do
     end
   end
 
-  def handle_call({:fetch_fun_to_dispatch, caller_pid, {mock, _, _} = key}, _from, state) do
+  def handle_call(
+        {:add_expectation, owner_pid, {_mock, _, _} = key, expectation},
+        _from,
+        %{mode: :global} = state
+      ) do
+    state = maybe_add_and_monitor_pid(state, owner_pid)
+
+    state =
+      update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
+        Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
+      end)
+
+    {:reply, :ok, %{state | global_owner_pid: owner_pid}}
+  end
+
+  def handle_call(
+        {:fetch_fun_to_dispatch, caller_pid, {mock, _, _} = key},
+        _from,
+        %{mode: :private} = state
+      ) do
     owner_pid = state.allowances[caller_pid][mock] || caller_pid
 
     case state.expectations[owner_pid][key] do
@@ -70,6 +97,27 @@ defmodule Mox.Server do
 
       {total, [call | calls], stub} ->
         new_state = put_in(state.expectations[owner_pid][key], {total, calls, stub})
+        {:reply, {:ok, call}, new_state}
+    end
+  end
+
+  def handle_call(
+        {:fetch_fun_to_dispatch, _caller_pid, {_mock, _, _} = key},
+        _from,
+        %{mode: :global} = state
+      ) do
+    case state.expectations[state.global_owner_pid][key] do
+      nil ->
+        {:reply, :no_expectation, state}
+
+      {total, [], nil} ->
+        {:reply, {:out_of_expectations, total}, state}
+
+      {_, [], stub} ->
+        {:reply, {:ok, stub}, state}
+
+      {total, [call | calls], stub} ->
+        new_state = put_in(state.expectations[state.global_owner_pid][key], {total, calls, stub})
         {:reply, {:ok, call}, new_state}
     end
   end
@@ -91,7 +139,11 @@ defmodule Mox.Server do
     {:reply, :ok, state}
   end
 
-  def handle_call({:allow, mock, owner_pid, pid}, _from, state) do
+  def handle_call({:allow, _, _, _}, _from, %{mode: :global} = state) do
+    {:reply, {:error, :in_global_mode}, state}
+  end
+
+  def handle_call({:allow, mock, owner_pid, pid}, _from, %{mode: :private} = state) do
     %{allowances: allowances, expectations: expectations} = state
     owner_pid = state.allowances[owner_pid][mock] || owner_pid
     allowance = allowances[pid][mock]
@@ -112,6 +164,14 @@ defmodule Mox.Server do
         state = put_in(state, [:allowances, pid_map(pid), mock], owner_pid)
         {:reply, :ok, state}
     end
+  end
+
+  def handle_call({:set_mode, :global}, owner_pid, state) do
+    {:reply, :ok, %{state | mode: :global, global_owner_pid: owner_pid}}
+  end
+
+  def handle_call({:set_mode, :private}, _owner_pid, state) do
+    {:reply, :ok, %{state | mode: :private, global_owner_pid: nil}}
   end
 
   def handle_cast({:exit, pid}, state) do
