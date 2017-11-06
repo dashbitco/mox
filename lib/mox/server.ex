@@ -4,7 +4,7 @@ defmodule Mox.Server do
   use GenServer
   @timeout 30000
 
-  # Public API
+  # API
 
   def start_link(_options) do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -34,8 +34,8 @@ defmodule Mox.Server do
     GenServer.cast(__MODULE__, {:exit, pid})
   end
 
-  def set_mode(mode) do
-    GenServer.call(__MODULE__, {:set_mode, mode})
+  def set_mode(owner_pid, mode) do
+    GenServer.call(__MODULE__, {:set_mode, owner_pid, mode})
   end
 
   # Callbacks
@@ -66,16 +66,18 @@ defmodule Mox.Server do
   def handle_call(
         {:add_expectation, owner_pid, {_mock, _, _} = key, expectation},
         _from,
-        %{mode: :global} = state
+        %{mode: :global, global_owner_pid: global_owner_pid} = state
       ) do
-    state = maybe_add_and_monitor_pid(state, owner_pid)
+    if owner_pid != global_owner_pid do
+      {:reply, {:error, {:not_global_owner, global_owner_pid}}, state}
+    else
+      state =
+        update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
+          Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
+        end)
 
-    state =
-      update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
-        Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
-      end)
-
-    {:reply, :ok, %{state | global_owner_pid: owner_pid}}
+      {:reply, :ok, state}
+    end
   end
 
   def handle_call(
@@ -166,11 +168,12 @@ defmodule Mox.Server do
     end
   end
 
-  def handle_call({:set_mode, :global}, owner_pid, state) do
+  def handle_call({:set_mode, owner_pid, :global}, _from, state) do
+    state = maybe_add_and_monitor_pid(state, owner_pid)
     {:reply, :ok, %{state | mode: :global, global_owner_pid: owner_pid}}
   end
 
-  def handle_call({:set_mode, :private}, _owner_pid, state) do
+  def handle_call({:set_mode, _owner_pid, :private}, _from, state) do
     {:reply, :ok, %{state | mode: :private, global_owner_pid: nil}}
   end
 
@@ -179,10 +182,19 @@ defmodule Mox.Server do
   end
 
   def handle_info({:DOWN, _, _, pid, _}, state) do
-    case state.deps do
-      %{^pid => {:DOWN, _}} -> {:noreply, down(state, pid)}
-      %{} -> {:noreply, state}
-    end
+    state =
+      case state.global_owner_pid do
+        ^pid -> %{state | mode: :private, global_owner_pid: nil}
+        _ -> state
+      end
+
+    state =
+      case state.deps do
+        %{^pid => {:DOWN, _}} -> down(state, pid)
+        %{} -> state
+      end
+
+    {:noreply, state}
   end
 
   # Helper functions

@@ -88,8 +88,17 @@ defmodule Mox do
 
   ## Multi-process collaboration
 
-  Mox supports multi-process collaboration via an explicit allowances
-  where a child process is allowed to use the expectations and stubs
+  Mox supports multi-process collaboration via two mechanisms:
+
+    1. explicit allowances
+    2. global mode
+
+  The allowance mechanism can still run tests concurrently while
+  the global ones doesn't. We explore both next.
+
+  ### Explicit allowances
+
+  An allowance permits a child process to use the expectations and stubs
   defined in the parent process while still being safe for async tests.
 
       test "invokes add and mult from a task" do
@@ -107,16 +116,16 @@ defmodule Mox do
         |> Task.await
       end
 
-  ## Global mode
+  ### Global mode
 
   Mox supports global mode, where any process can consume mocks and stubs
   defined in your tests. To manually switch to global mode use:
 
-      set_mox_global!()
+      set_mox_global()
 
   which can be done as a setup callback:
 
-      setup :set_mox_global!
+      setup :set_mox_global
 
       test "invokes add and mult from a task" do
         MyApp.CalcMock
@@ -130,12 +139,14 @@ defmodule Mox do
         |> Task.await
       end
 
+  The default mode is `private` and the global mode must always be explicit
+  set per test.
 
-  You can also automatically choose global or private mode depending on if
-  your tests run in async mode or not with. In such case Mox will use
+  You can also automatically choose global or private mode depending on
+  if your tests run in async mode or not with. In such case Mox will use
   private mode when `async: true`, global mode otherwise:
 
-      setup :set_mox_from_context!
+      setup :set_mox_from_context
 
   """
 
@@ -152,29 +163,29 @@ defmodule Mox do
   consumed by the same process unless other processes are
   explicitly allowed.
 
-      setup :set_mox_private!
+      setup :set_mox_private
 
   """
-  def set_mox_private!(_context \\ %{}), do: Mox.Server.set_mode(:private)
+  def set_mox_private(_context \\ %{}), do: Mox.Server.set_mode(self(), :private)
 
   @doc """
   Sets the Mox to global mode, where mocks can be consumed
   by any process.
 
-      setup :set_mox_global!
+      setup :set_mox_global
 
   """
-  def set_mox_global!(_context \\ %{}), do: Mox.Server.set_mode(:global)
+  def set_mox_global(_context \\ %{}), do: Mox.Server.set_mode(self(), :global)
 
   @doc """
   Chooses the Mox mode based on context. When `async: true` is used
   the mode is `:private`, otherwise `:global` is chosen.
 
-      setup :set_mox_from_context!
+      setup :set_mox_from_context
 
   """
-  def set_mox_from_context!(%{async: true} = _context), do: set_mox_private!()
-  def set_mox_from_context!(_context), do: set_mox_global!()
+  def set_mox_from_context(%{async: true} = _context), do: set_mox_private()
+  def set_mox_from_context(_context), do: set_mox_global()
 
   @doc """
   Defines a mock with the given name `:for` the given behaviour.
@@ -292,10 +303,18 @@ defmodule Mox do
         inspected = inspect(self())
 
         raise ArgumentError, """
-        cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected})
-        because the process has been allowed by #{inspect(owner_pid)}.
+        cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
+        because the process has been allowed by #{inspect(owner_pid)}. \
+        You cannot define expectations/stubs in a process that has been allowed
+        """
 
-        Note you cannot mix allowances with expectations/stubs
+      {:error, {:not_global_owner, global_pid}} ->
+        inspected = inspect(self())
+
+        raise ArgumentError, """
+        cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
+        because Mox is in global mode and the global process is #{inspect(global_pid)}. \
+        Only the process that set Mox to global can set expectations/stubs in global mode
         """
     end
   end
@@ -323,25 +342,26 @@ defmodule Mox do
 
       {:error, {:already_allowed, actual_pid}} ->
         raise ArgumentError, """
-        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)}
+        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)} \
         because it is already allowed by #{inspect(actual_pid)}.
 
-        If you are seeing this error message, it is because you are either
-        setting up allowances from different processes or your tests have
-        async: true and you found a race condition where two different tests
+        If you are seeing this error message, it is because you are either \
+        setting up allowances from different processes or your tests have \
+        async: true and you found a race condition where two different tests \
         are allowing the same process
         """
 
       {:error, :expectations_defined} ->
         raise ArgumentError, """
-        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)}
+        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)} \
         because the process has already defined its own expectations/stubs
         """
 
       {:error, :in_global_mode} ->
         raise ArgumentError, """
-        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)}
-        because in global mode, the process already has access to all defined expectations/stubs
+        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)} \
+        because Mox is in global mode, the process already has access to all \
+        defined expectations/stubs
         """
     end
   end
