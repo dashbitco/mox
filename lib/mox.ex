@@ -229,6 +229,9 @@ defmodule Mox do
 
     info =
       quote do
+        # Establish a compile time dependency between the mock and the behaviour
+        _ = unquote(behaviour).module_info(:module)
+
         def __mock_for__ do
           unquote(behaviour)
         end
