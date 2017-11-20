@@ -7,7 +7,7 @@ defmodule Mox.MixProject do
     [
       app: :mox,
       version: @version,
-      elixir: "~> 1.4",
+      elixir: "~> 1.5",
       start_permanent: Mix.env() == :prod,
       name: "Mox",
       description: "Mocks and explicit contracts for Elixir",
