@@ -72,8 +72,8 @@ defmodule Mox do
       Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
 
   Then you need to make sure that files in `test/support` get compiled
-  with the rest of the project. Edit your `mix.exs` file to add `test/support`
-  directory to compilation paths:
+  with the rest of the project. Edit your `mix.exs` file to add the
+  `test/support` directory to compilation paths:
 
       def project do
         [
@@ -94,7 +94,7 @@ defmodule Mox do
     2. global mode
 
   The allowance mechanism can still run tests concurrently while
-  the global ones doesn't. We explore both next.
+  the global one doesn't. We explore both next.
 
   ### Explicit allowances
 
@@ -139,11 +139,11 @@ defmodule Mox do
         |> Task.await
       end
 
-  The default mode is `private` and the global mode must always be explicit
+  The default mode is `private` and the global mode must always be explicitly
   set per test.
 
   You can also automatically choose global or private mode depending on
-  if your tests run in async mode or not with. In such case Mox will use
+  if your tests run in async mode or not. In such case Mox will use
   private mode when `async: true`, global mode otherwise:
 
       setup :set_mox_from_context
@@ -241,16 +241,16 @@ defmodule Mox do
   end
 
   @doc """
-  Defines that the `name` in `mock` with arity given by
-  `code` will be invoked `n` times.
+  Expects the `name` in `mock` with arity given by `code`
+  to be invoked `n` times.
 
   ## Examples
 
-  To allow `MyMock.add/2` to be called once:
+  To expect `MyMock.add/2` to be called once:
 
       expect(MyMock, :add, fn x, y -> x + y end)
 
-  To allow `MyMock.add/2` to be called five times:
+  To expect `MyMock.add/2` to be called five times:
 
       expect(MyMock, :add, 5, fn x, y -> x + y end)
 
@@ -266,10 +266,10 @@ defmodule Mox do
   end
 
   @doc """
-  Defines that the `name` in `mock` with arity given by
-  `code` can be invoked zero or many times.
+  Allows the `name` in `mock` with arity given by `code` to
+  be invoked zero or many times.
 
-  Opposite to expectations, stubs are never verified.
+  Unlike expectations, stubs are never verified.
 
   If expectations and stubs are defined for the same function
   and arity, the stub is invoked only after all expectations are
