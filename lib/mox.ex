@@ -194,9 +194,14 @@ defmodule Mox do
 
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
-    behaviour = options[:for] || raise ArgumentError, ":for option is required on defmock"
-    validate_behaviour!(behaviour)
-    define_mock_module(name, behaviour)
+    behaviours = options[:for] || raise ArgumentError, ":for option is required on defmock"
+    mock_funs =
+      behaviours
+      |> Enum.map(&validate_behaviour!/1)
+      |> Enum.reduce(%{}, fn behaviour, acc ->
+        Map.put(acc, behaviour, generate_mock_funs(behaviour))
+      end)
+    define_mock_module(name, mock_funs)
     name
   end
 
@@ -211,33 +216,41 @@ defmodule Mox do
               "module #{inspect(behaviour)} is not a behaviour, please pass a behaviour to :for"
 
       true ->
-        :ok
+        behaviour
     end
   end
 
-  defp define_mock_module(name, behaviour) do
-    funs =
-      for {fun, arity} <- behaviour.behaviour_info(:callbacks) do
-        args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
+  defp generate_mock_funs(behaviour) do
+    for {fun, arity} <- behaviour.behaviour_info(:callbacks) do
+      args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
 
+      quote do
+        def unquote(fun)(unquote_splicing(args)) do
+          Mox.__dispatch__(__MODULE__, unquote(fun), unquote(arity), unquote(args))
+        end
+      end
+    end
+  end
+
+  defp define_mock_module(name, mock_funs) do
+    info =
+      for {behaviour, _} <- mock_funs do
         quote do
-          def unquote(fun)(unquote_splicing(args)) do
-            Mox.__dispatch__(__MODULE__, unquote(fun), unquote(arity), unquote(args))
+        # Establish a compile time dependency between the mock and the behaviours
+          _ = unquote(behaviour).module_info(:module)
+
+          def __mock_for__ do
+            unquote(behaviour)
           end
         end
       end
 
-    info =
-      quote do
-        # Establish a compile time dependency between the mock and the behaviour
-        _ = unquote(behaviour).module_info(:module)
-
-        def __mock_for__ do
-          unquote(behaviour)
-        end
-      end
-
-    Module.create(name, [info | funs], Macro.Env.location(__ENV__))
+    #TODO: Clean up / rename
+    module_funs = 
+      Enum.reduce(mock_funs, [], fn ({_behaviour, funs}, acc) -> 
+        acc ++ funs
+      end) 
+    Module.create(name, [info | module_funs], Macro.Env.location(__ENV__))
   end
 
   @doc """

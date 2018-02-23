@@ -9,7 +9,12 @@ defmodule MoxTest do
     @callback mult(integer(), integer()) :: integer()
   end
 
-  defmock(CalcMock, for: Calculator)
+  defmodule ScientificCalculator do
+    @callback exponent(integer(), integer()) :: integer()
+  end
+
+  defmock(CalcMock, for: [Calculator])
+  defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
 
   def in_all_modes(callback) do
     set_mox_global()
@@ -21,18 +26,31 @@ defmodule MoxTest do
   describe "defmock/2" do
     test "raises for unknown module" do
       assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
-        defmock(MyMock, for: Unknown)
+        defmock(MyMock, for: [Unknown])
       end
     end
 
     test "raises for non behaviour" do
       assert_raise ArgumentError, ~r"module String is not a behaviour", fn ->
-        defmock(MyMock, for: String)
+        defmock(MyMock, for: [String])
       end
+    end
+
+    test "accepts a list of behaviours" do
+      assert defmock(MyMock, for: [Calculator, ScientificCalculator])
     end
   end
 
   describe "expect/4" do
+    test "works on multiple behaviours" do
+      SciCalcMock
+      |> expect(:exponent, fn x, y -> :math.pow(x, y) end)
+      |> expect(:add, fn x, y -> x + y end)
+
+      assert SciCalcMock.exponent(2, 3) == 8
+      assert SciCalcMock.add(2, 3) == 5
+    end
+
     test "is invoked n times by the same process in private mode" do
       set_mox_private()
 
