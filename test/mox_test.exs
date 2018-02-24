@@ -13,7 +13,7 @@ defmodule MoxTest do
     @callback exponent(integer(), integer()) :: integer()
   end
 
-  defmock(CalcMock, for: [Calculator])
+  defmock(CalcMock, for: Calculator)
   defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
 
   def in_all_modes(callback) do
@@ -26,13 +26,13 @@ defmodule MoxTest do
   describe "defmock/2" do
     test "raises for unknown module" do
       assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
-        defmock(MyMock, for: [Unknown])
+        defmock(MyMock, for: Unknown)
       end
     end
 
     test "raises for non behaviour" do
       assert_raise ArgumentError, ~r"module String is not a behaviour", fn ->
-        defmock(MyMock, for: [String])
+        defmock(MyMock, for: String)
       end
     end
 

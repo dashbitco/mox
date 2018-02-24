@@ -194,14 +194,14 @@ defmodule Mox do
 
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
-    behaviours = options[:for] || raise ArgumentError, ":for option is required on defmock"
+    behaviours = options[:for] |> List.wrap() || raise ArgumentError, ":for option is required on defmock"
     mock_funs =
       behaviours
       |> Enum.map(&validate_behaviour!/1)
-      |> Enum.reduce(%{}, fn behaviour, acc ->
-        Map.put(acc, behaviour, generate_mock_funs(behaviour))
+      |> Enum.reduce([], fn behaviour, acc ->
+        acc ++ generate_mock_funs(behaviour)
       end)
-    define_mock_module(name, mock_funs)
+    define_mock_module(name, behaviours, mock_funs)
     name
   end
 
@@ -232,25 +232,20 @@ defmodule Mox do
     end
   end
 
-  defp define_mock_module(name, mock_funs) do
+  defp define_mock_module(name, behaviours, mock_funs) do
     info =
-      for {behaviour, _} <- mock_funs do
-        quote do
+      quote do
         # Establish a compile time dependency between the mock and the behaviours
-          _ = unquote(behaviour).module_info(:module)
+        _ = Enum.map(unquote(behaviours), fn behaviour ->
+          behaviour.module_info(:module)
+        end)
 
-          def __mock_for__ do
-            unquote(behaviour)
-          end
+        def __mock_for__ do
+          unquote(behaviours)
         end
       end
 
-    #TODO: Clean up / rename
-    module_funs = 
-      Enum.reduce(mock_funs, [], fn ({_behaviour, funs}, acc) -> 
-        acc ++ funs
-      end) 
-    Module.create(name, [info | module_funs], Macro.Env.location(__ENV__))
+    Module.create(name, [info | mock_funs], Macro.Env.location(__ENV__))
   end
 
   @doc """
