@@ -62,7 +62,7 @@ defmodule Mox do
   All expectations are defined based on the current process. This
   means multiple tests using the same mock can still run concurrently.
 
-  Mox supports defining a mock for multiple behaviours.
+  Mox supports defining mocks for multiple behaviours.
 
   Suppose your library also defines a scientific calculator behaviour:
 
