@@ -62,6 +62,18 @@ defmodule Mox do
   All expectations are defined based on the current process. This
   means multiple tests using the same mock can still run concurrently.
 
+  Mox supports defining mocks for multiple behaviours.
+
+  Suppose your library also defines a scientific calculator behaviour:
+
+      defmodule MyApp.ScientificCalculator do
+        @callback exponent(integer(), integer()) :: integer()
+      end
+
+  You can mock both the calculator and scientific calculator behaviour:
+
+      Mox.defmock(MyApp.SciCalcMock, for: [MyApp.Calculator, MyApp.ScientificCalculator])
+
   ## Compile-time requirements
 
   If the mock needs to be available during the project compilation, for
@@ -188,15 +200,24 @@ defmodule Mox do
   def set_mox_from_context(_context), do: set_mox_global()
 
   @doc """
-  Defines a mock with the given name `:for` the given behaviour.
+  Defines a mock with the given name `:for` the given behaviour(s).
 
       Mox.defmock MyMock, for: MyBehaviour
 
+  With multiple behaviours:
+
+      Mox.defmock MyMock, for: [MyBehaviour, MyOtherBehaviour]
+
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
-    behaviour = options[:for] || raise ArgumentError, ":for option is required on defmock"
-    validate_behaviour!(behaviour)
-    define_mock_module(name, behaviour)
+    behaviours = options[:for] |> List.wrap() || raise ArgumentError, ":for option is required on defmock"
+    mock_funs =
+      behaviours
+      |> Enum.map(&validate_behaviour!/1)
+      |> Enum.reduce([], fn behaviour, acc ->
+        acc ++ generate_mock_funs(behaviour)
+      end)
+    define_mock_module(name, behaviours, mock_funs)
     name
   end
 
@@ -211,33 +232,36 @@ defmodule Mox do
               "module #{inspect(behaviour)} is not a behaviour, please pass a behaviour to :for"
 
       true ->
-        :ok
+        behaviour
     end
   end
 
-  defp define_mock_module(name, behaviour) do
-    funs =
-      for {fun, arity} <- behaviour.behaviour_info(:callbacks) do
-        args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
+  defp generate_mock_funs(behaviour) do
+    for {fun, arity} <- behaviour.behaviour_info(:callbacks) do
+      args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
 
-        quote do
-          def unquote(fun)(unquote_splicing(args)) do
-            Mox.__dispatch__(__MODULE__, unquote(fun), unquote(arity), unquote(args))
-          end
+      quote do
+        def unquote(fun)(unquote_splicing(args)) do
+          Mox.__dispatch__(__MODULE__, unquote(fun), unquote(arity), unquote(args))
         end
       end
+    end
+  end
 
+  defp define_mock_module(name, behaviours, mock_funs) do
     info =
       quote do
-        # Establish a compile time dependency between the mock and the behaviour
-        _ = unquote(behaviour).module_info(:module)
+        # Establish a compile time dependency between the mock and the behaviours
+        _ = Enum.map(unquote(behaviours), fn behaviour ->
+          behaviour.module_info(:module)
+        end)
 
         def __mock_for__ do
-          unquote(behaviour)
+          unquote(behaviours)
         end
       end
 
-    Module.create(name, [info | funs], Macro.Env.location(__ENV__))
+    Module.create(name, [info | mock_funs], Macro.Env.location(__ENV__))
   end
 
   @doc """

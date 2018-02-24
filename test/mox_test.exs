@@ -9,7 +9,12 @@ defmodule MoxTest do
     @callback mult(integer(), integer()) :: integer()
   end
 
+  defmodule ScientificCalculator do
+    @callback exponent(integer(), integer()) :: integer()
+  end
+
   defmock(CalcMock, for: Calculator)
+  defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
 
   def in_all_modes(callback) do
     set_mox_global()
@@ -30,9 +35,22 @@ defmodule MoxTest do
         defmock(MyMock, for: String)
       end
     end
+
+    test "accepts a list of behaviours" do
+      assert defmock(MyMock, for: [Calculator, ScientificCalculator])
+    end
   end
 
   describe "expect/4" do
+    test "works with multiple behaviours" do
+      SciCalcMock
+      |> expect(:exponent, fn x, y -> :math.pow(x, y) end)
+      |> expect(:add, fn x, y -> x + y end)
+
+      assert SciCalcMock.exponent(2, 3) == 8
+      assert SciCalcMock.add(2, 3) == 5
+    end
+
     test "is invoked n times by the same process in private mode" do
       set_mox_private()
 
@@ -356,6 +374,17 @@ defmodule MoxTest do
         assert CalcMock.add(1, 1) == 42
       end)
     end
+
+    test "works with multiple behaviours" do
+      in_all_modes(fn ->
+        SciCalcMock
+        |> stub(:add, fn x, y -> x + y end)
+        |> stub(:exponent, fn x, y -> :math.pow(x, y) end) 
+
+        assert SciCalcMock.add(1, 1) == 2
+        assert SciCalcMock.exponent(2, 3) == 8 
+      end)
+    end 
 
     test "raises if a non-mock is given" do
       in_all_modes(fn ->
