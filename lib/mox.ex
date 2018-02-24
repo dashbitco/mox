@@ -62,6 +62,18 @@ defmodule Mox do
   All expectations are defined based on the current process. This
   means multiple tests using the same mock can still run concurrently.
 
+  Mox supports defining a mock for multiple behaviours.
+
+  Suppose your library also defines a scientific calculator behaviour:
+
+      defmodule MyApp.ScientificCalculator do
+        @callback exponent(integer(), integer()) :: integer()
+      end
+
+  You can mock both the calculator and scientific calculator behaviour:
+
+      Mox.defmock(MyApp.SciCalcMock, for: [MyApp.Calculator, MyApp.ScientificCalculator])
+
   ## Compile-time requirements
 
   If the mock needs to be available during the project compilation, for
@@ -188,9 +200,13 @@ defmodule Mox do
   def set_mox_from_context(_context), do: set_mox_global()
 
   @doc """
-  Defines a mock with the given name `:for` the given behaviour.
+  Defines a mock with the given name `:for` the given behaviour(s).
 
       Mox.defmock MyMock, for: MyBehaviour
+
+  With multiple behaviours:
+
+      Mox.defmock MyMock, for: [MyBehaviour, MyOtherBehaviour]
 
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
