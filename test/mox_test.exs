@@ -42,7 +42,7 @@ defmodule MoxTest do
   end
 
   describe "expect/4" do
-    test "works on multiple behaviours" do
+    test "works with multiple behaviours" do
       SciCalcMock
       |> expect(:exponent, fn x, y -> :math.pow(x, y) end)
       |> expect(:add, fn x, y -> x + y end)
@@ -374,6 +374,17 @@ defmodule MoxTest do
         assert CalcMock.add(1, 1) == 42
       end)
     end
+
+    test "works with multiple behaviours" do
+      in_all_modes(fn ->
+        SciCalcMock
+        |> stub(:add, fn x, y -> x + y end)
+        |> stub(:exponent, fn x, y -> :math.pow(x, y) end) 
+
+        assert SciCalcMock.add(1, 1) == 2
+        assert SciCalcMock.exponent(2, 3) == 8 
+      end)
+    end 
 
     test "raises if a non-mock is given" do
       in_all_modes(fn ->
