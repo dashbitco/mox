@@ -210,14 +210,12 @@ defmodule Mox do
 
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
-    behaviours = options[:for] |> List.wrap() || raise ArgumentError, ":for option is required on defmock"
-    mock_funs =
-      behaviours
-      |> Enum.map(&validate_behaviour!/1)
-      |> Enum.reduce([], fn behaviour, acc ->
-        acc ++ generate_mock_funs(behaviour)
-      end)
-    define_mock_module(name, behaviours, mock_funs)
+    behaviours =
+      options[:for] |> List.wrap() || raise ArgumentError, ":for option is required on defmock"
+
+    compile_header = generate_compile_time_dependency(behaviours)
+    mock_funs = generate_mock_funs(behaviours)
+    define_mock_module(name, behaviours, compile_header ++ mock_funs)
     name
   end
 
@@ -236,8 +234,19 @@ defmodule Mox do
     end
   end
 
-  defp generate_mock_funs(behaviour) do
-    for {fun, arity} <- behaviour.behaviour_info(:callbacks) do
+  defp generate_compile_time_dependency(behaviours) do
+    for behaviour <- behaviours do
+      validate_behaviour!(behaviour)
+
+      quote do
+        unquote(behaviour).module_info(:module)
+      end
+    end
+  end
+
+  defp generate_mock_funs(behaviours) do
+    for behaviour <- behaviours,
+        {fun, arity} <- behaviour.behaviour_info(:callbacks) do
       args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
 
       quote do
@@ -248,20 +257,15 @@ defmodule Mox do
     end
   end
 
-  defp define_mock_module(name, behaviours, mock_funs) do
+  defp define_mock_module(name, behaviours, body) do
     info =
       quote do
-        # Establish a compile time dependency between the mock and the behaviours
-        _ = Enum.map(unquote(behaviours), fn behaviour ->
-          behaviour.module_info(:module)
-        end)
-
         def __mock_for__ do
           unquote(behaviours)
         end
       end
 
-    Module.create(name, [info | mock_funs], Macro.Env.location(__ENV__))
+    Module.create(name, [info | body], Macro.Env.location(__ENV__))
   end
 
   @doc """
