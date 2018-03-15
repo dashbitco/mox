@@ -30,17 +30,6 @@ defmodule Mox do
 
       Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
 
-  Once the mock is defined, you can pass it to the system under the test.
-  If the system under test relies on application configuration, you should
-  also set it before the tests starts to keep the async property. Usually
-  in your config files:
-
-      config :my_app, :calculator, MyApp.CalcMock
-
-  Or in your `test_helper.exs`:
-
-      Application.put_env(:my_app, :calculator, MyApp.CalcMock)
-
   Now in your tests, you can define expectations and verify them:
 
       use ExUnit.Case, async: true
@@ -59,8 +48,23 @@ defmodule Mox do
         assert MyApp.CalcMock.mult(2, 3) == 6
       end
 
+  In practice, you will have to pass the mock to the system under the test.
+  If the system under test relies on application configuration, you should
+  also set it before the tests starts to keep the async property. Usually
+  in your config files:
+
+      config :my_app, :calculator, MyApp.CalcMock
+
+  Or in your `test_helper.exs`:
+
+      Application.put_env(:my_app, :calculator, MyApp.CalcMock)
+
   All expectations are defined based on the current process. This
-  means multiple tests using the same mock can still run concurrently.
+  means multiple tests using the same mock can still run concurrently
+  unless the Mox is set to global mode. See the "Multi-process collaboration"
+  section.
+
+  ## Multiple behaviours
 
   Mox supports defining mocks for multiple behaviours.
 
@@ -138,6 +142,7 @@ defmodule Mox do
   which can be done as a setup callback:
 
       setup :set_mox_global
+      setup :verify_on_exit!
 
       test "invokes add and mult from a task" do
         MyApp.CalcMock
@@ -151,8 +156,8 @@ defmodule Mox do
         |> Task.await
       end
 
-  The default mode is `private` and the global mode must always be explicitly
-  set per test.
+  The global mode must always be explicitly set per test. By default
+  mocks run on `private` mode.
 
   You can also automatically choose global or private mode depending on
   if your tests run in async mode or not. In such case Mox will use
