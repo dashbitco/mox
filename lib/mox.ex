@@ -165,6 +165,28 @@ defmodule Mox do
 
       setup :set_mox_from_context
 
+  Mox provides some useful debugging output that is accessible through setting up
+  some configuration options (all default to false):
+
+  config :mox,
+    log_mock_calls: true,
+    log_unmocked_calls: true,
+    show_stacktrace_for_mocked_calls: true,
+    show_stacktrace_for_unmocked_calls: true
+
+  When `:log_mock_calls` is true, all calls to mocked functions with arity
+  and arguments info is output to the console.  This is useful for inspecting
+  the order of calls that are happening.
+
+  When `:log_unmocked_calls` is true, the call to an unmocked function with arity
+  and arguments info is output to the console.This is useful for etermining more
+  information about unmocked function calls.
+
+  When `:show_stacktrace_for_mocked_calls` is true, the `:current_stacktrace` from
+  `Process.info/2` is displayed for all mocked function calls.
+
+  When `:show_stacktrace_for_unmocked_calls` is true, the `:current_stacktrace` from
+  `Process.info/2` is displayed for the unmocked function call.
   """
 
   defmodule UnexpectedCallError do
@@ -468,21 +490,44 @@ defmodule Mox do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
 
+        if log_unmocked_calls?(), do: log_call(:unmocked, mock, name, arity, args)
+
         raise UnexpectedCallError,
               "no expectation defined for #{mfa} in process #{inspect(self())}"
 
       {:out_of_expectations, count} ->
         mfa = Exception.format_mfa(mock, name, arity)
 
+        if log_unmocked_calls?(), do: log_call(:unmocked, mock, name, arity, args)
+
         raise UnexpectedCallError,
               "expected #{mfa} to be called #{times(count)} but it has been " <>
                 "called #{times(count + 1)} in process #{inspect(self())}"
 
       {:ok, fun_to_call} ->
+        if log_mock_calls?(), do: log_call(:mocked, mock, name, arity, args)
         apply(fun_to_call, args)
     end
   end
 
+  defp log_call(type, mock, name, arity, args) do
+    IO.puts("#{log_label(type)} #{mock}.#{name}/#{arity} with args: #{inspect(args)}")
+
+    if show_stacktrace_for_calls?(type) do
+      IO.inspect(Process.info(self(), :current_stacktrace))
+      IO.puts(nil)
+    end
+  end
+
+  defp log_label(:mocked),   do: "\u001b[36mMOCKED CALL\u001b[0m"
+  defp log_label(:unmocked), do: "\u001b[31mUNMOCKED CALL\u001b[0m"
+
   defp times(1), do: "once"
   defp times(n), do: "#{n} times"
+
+  defp log_mock_calls?,                       do: Application.get_env(:mox, :log_mock_calls, false)
+  defp log_unmocked_calls?,                   do: Application.get_env(:mox, :log_unmocked_calls, false)
+  defp show_stacktrace_for_calls?(:mocked),   do: Application.get_env(:mox, :show_stacktrace_for_mocked_calls, false)
+  defp show_stacktrace_for_calls?(:unmocked), do: Application.get_env(:mox, :show_stacktrace_for_unmocked_calls, false)
+
 end
