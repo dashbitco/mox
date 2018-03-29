@@ -428,6 +428,15 @@ defmodule MoxTest do
       def exponent(x, y), do: :math.pow(x, y)
     end
 
+    test "can override stubs" do
+      in_all_modes(fn ->
+        stub_with(CalcMock, CalcImplementation)
+        |> expect(:add, fn 1, 2 -> 4 end)
+        assert CalcMock.add(1, 2) == 4
+        verify!()
+      end)
+    end
+
     test "stubs all functions with functions from a module" do
       in_all_modes(fn ->
         stub_with(CalcMock, CalcImplementation)

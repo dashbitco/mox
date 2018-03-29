@@ -357,6 +357,7 @@ defmodule Mox do
         stub(mock, fun, from_mfa(module, fun, arity))
       end
     end
+    mock
   end
 
   defp from_mfa(m, f, a) do
