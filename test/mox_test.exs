@@ -13,11 +13,6 @@ defmodule MoxTest do
     @callback exponent(integer(), integer()) :: integer()
   end
 
-  defmodule CalculatorImplementation do
-    def add(a, b), do: a + b
-    def mult(a, b), do: a * b
-  end
-
   defmock(CalcMock, for: Calculator)
   defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
 
@@ -417,13 +412,50 @@ defmodule MoxTest do
   end
 
   describe "stub_with/2" do
+
+    defmodule CalcImplementation do
+      @behaviour Calculator
+      def add(x, y), do: x + y
+      def mult(x, y), do: x * y
+    end
+
+    defmodule SciCalcImplementation do
+      @behaviour Calculator
+      def add(x, y), do: x + y
+      def mult(x, y), do: x * y
+
+      @behaviour ScientificCalculator
+      def exponent(x, y), do: :math.pow(x, y)
+    end
+
     test "stubs all functions with functions from a module" do
       in_all_modes(fn ->
-        stub_with(CalcMock, CalculatorImplementation)
+        stub_with(CalcMock, CalcImplementation)
         assert CalcMock.add(1, 2) == 3
         assert CalcMock.add(3, 4) == 7
         assert CalcMock.mult(2, 2) == 4
         assert CalcMock.mult(3, 4) == 12
+      end)
+    end
+
+    test "Leaves behaviours not implemented by the module un-stubbed" do
+      in_all_modes(fn ->
+        stub_with(SciCalcMock, CalcImplementation)
+        assert SciCalcMock.add(1, 2) == 3
+        assert SciCalcMock.mult(3, 4) == 12
+
+        assert_raise Mox.UnexpectedCallError, fn ->
+          SciCalcMock.exponent(2, 10)
+        end
+      end)
+    end
+
+    test "can stub multiple behaviours from a single module" do
+      in_all_modes(fn ->
+        stub_with(SciCalcMock, SciCalcImplementation)
+        assert SciCalcMock.add(1, 2) == 3
+        assert SciCalcMock.mult(3, 4) == 12
+        assert SciCalcMock.exponent(2, 10) == 1024
       end)
     end
   end

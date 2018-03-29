@@ -352,8 +352,10 @@ defmodule Mox do
 
   """
   def stub_with(mock, module) do
-    for {fun, arity} <- behaviour_callbacks(mock) do
-      stub(mock, fun, from_mfa(module, fun, arity))
+    for {behaviour, fun, arity} <- behaviour_callbacks(mock) do
+      if Enum.member?(module_behaviours(module), behaviour) do
+        stub(mock, fun, from_mfa(module, fun, arity))
+      end
     end
   end
 
@@ -363,9 +365,16 @@ defmodule Mox do
     |> elem(0)
   end
 
+  defp module_behaviours(module) do
+    module.module_info(:attributes)
+    |> Keyword.get_values(:behaviour)
+    |> List.flatten
+  end
+
   defp behaviour_callbacks(mock) do
-    [behaviour] = mock.__mock_for__()
-    behaviour.behaviour_info(:callbacks)
+    for behaviour <- mock.__mock_for__(),
+        {fun, arity} <- behaviour.behaviour_info(:callbacks),
+    do: {behaviour, fun, arity}
   end
 
   defp add_expectation!(mock, name, code, value) do
