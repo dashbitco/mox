@@ -13,6 +13,11 @@ defmodule MoxTest do
     @callback exponent(integer(), integer()) :: integer()
   end
 
+  defmodule CalculatorImplementation do
+    def add(a, b), do: a + b
+    def mult(a, b), do: a * b
+  end
+
   defmock(CalcMock, for: Calculator)
   defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
 
@@ -407,6 +412,18 @@ defmodule MoxTest do
         assert_raise ArgumentError, ~r"unknown function add/3 for mock CalcMock", fn ->
           stub(CalcMock, :add, fn x, y, z -> x + y + z end)
         end
+      end)
+    end
+  end
+
+  describe "stub_with/2" do
+    test "stubs all functions with functions from a module" do
+      in_all_modes(fn ->
+        stub_with(CalcMock, CalculatorImplementation)
+        assert CalcMock.add(1, 2) == 3
+        assert CalcMock.add(3, 4) == 7
+        assert CalcMock.mult(2, 2) == 4
+        assert CalcMock.mult(3, 4) == 12
       end)
     end
   end
