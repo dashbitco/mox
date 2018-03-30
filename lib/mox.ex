@@ -323,11 +323,7 @@ defmodule Mox do
   end
 
   @doc """
-  Given a mock and a module implementing the mocked behaviour, stubs all
-  functions described by the behaviour using the implementations in the module.
-
-  This is useful if you want to effectively un-mock a mock or override only a
-  subset of a behaviour.
+  Stubs all functions described by the shared behaviours in the `mock` and `module`.
 
   ## Examples
 
@@ -337,6 +333,7 @@ defmodule Mox do
       end
 
       defmodule TestCalculator do
+        @behaviour Calculator
         def add(a, b), do: a + b
         def mult(a, b), do: a * b
       end
@@ -344,24 +341,43 @@ defmodule Mox do
       defmock(CalcMock, for: Calculator)
       stub_with(CalcMock, TestCalculator)
 
-  This is the same as calling `stub/3` for each function.
+  This is the same as calling `stub/3` for each behaviour in `CalcMock`:
 
-      stub(MyMock, :add, &TestCalculator.add/2)
-      stub(MyMock, :mult, &TestCalculator.mult/2)
+      stub(CalcMock, :add, &TestCalculator.add/2)
+      stub(CalcMock, :mult, &TestCalculator.mult/2)
 
   """
-  def stub_with(mock, module) do
-    unless Code.ensure_loaded?(module) do
-      raise ArgumentError, "cannot stub_with #{inspect(module)} because it is not available"
-    end
+  def stub_with(mock, module) when is_atom(mock) and is_atom(module) do
+    mock_behaviours = mock.__mock_for__()
 
-    for behaviour <- mock.__mock_for__(),
-        {fun, arity} <- behaviour.behaviour_info(:callbacks),
-        function_exported?(module, fun, arity) do
+    behaviours =
+      case module_behaviours(module) do
+        [] ->
+          raise ArgumentError, "#{inspect(module)} does not implement any behaviour"
+
+        behaviours ->
+          case Enum.filter(behaviours, &(&1 in mock_behaviours)) do
+            [] ->
+              raise ArgumentError,
+                    "#{inspect(module)} and #{inspect(mock)} do not share any behaviour"
+
+            common ->
+              common
+          end
+      end
+
+    for behaviour <- behaviours,
+        {fun, arity} <- behaviour.behaviour_info(:callbacks) do
       stub(mock, fun, :erlang.make_fun(module, fun, arity))
     end
 
     mock
+  end
+
+  defp module_behaviours(module) do
+    module.module_info(:attributes)
+    |> Keyword.get_values(:behaviour)
+    |> List.flatten()
   end
 
   defp add_expectation!(mock, name, code, value) do
