@@ -379,12 +379,12 @@ defmodule MoxTest do
       in_all_modes(fn ->
         SciCalcMock
         |> stub(:add, fn x, y -> x + y end)
-        |> stub(:exponent, fn x, y -> :math.pow(x, y) end) 
+        |> stub(:exponent, fn x, y -> :math.pow(x, y) end)
 
         assert SciCalcMock.add(1, 1) == 2
-        assert SciCalcMock.exponent(2, 3) == 8 
+        assert SciCalcMock.exponent(2, 3) == 8
       end)
-    end 
+    end
 
     test "raises if a non-mock is given" do
       in_all_modes(fn ->
@@ -412,7 +412,6 @@ defmodule MoxTest do
   end
 
   describe "stub_with/2" do
-
     defmodule CalcImplementation do
       @behaviour Calculator
       def add(x, y), do: x + y
@@ -432,6 +431,7 @@ defmodule MoxTest do
       in_all_modes(fn ->
         stub_with(CalcMock, CalcImplementation)
         |> expect(:add, fn 1, 2 -> 4 end)
+
         assert CalcMock.add(1, 2) == 4
         verify!()
       end)

@@ -336,46 +336,32 @@ defmodule Mox do
         @callback mult(integer(), integer()) :: integer()
       end
 
-      defmodule CalculatorImplementation do
+      defmodule TestCalculator do
         def add(a, b), do: a + b
         def mult(a, b), do: a * b
       end
 
       defmock(CalcMock, for: Calculator)
-
-      stub_with(CalcMock, CalculatorImplementation)
+      stub_with(CalcMock, TestCalculator)
 
   This is the same as calling `stub/3` for each function.
 
-      stub(MyMock, :add, &CalculatorImplementation.add/2)
-      stub(MyMock, :mult, &CalculatorImplementation.mult/2)
+      stub(MyMock, :add, &TestCalculator.add/2)
+      stub(MyMock, :mult, &TestCalculator.mult/2)
 
   """
   def stub_with(mock, module) do
-    for {behaviour, fun, arity} <- behaviour_callbacks(mock) do
-      if Enum.member?(module_behaviours(module), behaviour) do
-        stub(mock, fun, from_mfa(module, fun, arity))
-      end
+    unless Code.ensure_loaded?(module) do
+      raise ArgumentError, "cannot stub_with #{inspect(module)} because it is not available"
     end
-    mock
-  end
 
-  defp from_mfa(m, f, a) do
-    quote(do: &unquote(m).unquote(f)/unquote(a))
-    |> Code.eval_quoted([])
-    |> elem(0)
-  end
-
-  defp module_behaviours(module) do
-    module.module_info(:attributes)
-    |> Keyword.get_values(:behaviour)
-    |> List.flatten
-  end
-
-  defp behaviour_callbacks(mock) do
     for behaviour <- mock.__mock_for__(),
         {fun, arity} <- behaviour.behaviour_info(:callbacks),
-    do: {behaviour, fun, arity}
+        function_exported?(module, fun, arity) do
+      stub(mock, fun, :erlang.make_fun(module, fun, arity))
+    end
+
+    mock
   end
 
   defp add_expectation!(mock, name, code, value) do
