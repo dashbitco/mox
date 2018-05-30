@@ -287,12 +287,16 @@ defmodule Mox do
 
       expect(MyMock, :add, 5, fn x, y -> x + y end)
 
+  To expect `MyMock.add/2` to not be called:
+
+      expect(MyMock, :add, 0, fn x, y -> :ok end)
+
   `expect/4` can also be invoked multiple times for the same
   name/arity, allowing you to give different behaviours on each
   invocation.
   """
   def expect(mock, name, n \\ 1, code)
-      when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 1 and is_function(code) do
+      when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 0 and is_function(code) do
     calls = List.duplicate(code, n)
     add_expectation!(mock, name, code, {n, calls, nil})
     mock

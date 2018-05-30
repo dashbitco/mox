@@ -85,6 +85,16 @@ defmodule MoxTest do
       assert CalcMock.mult(3, 2) == 6
     end
 
+    test "allows asserting that function is not called" do
+      CalcMock
+      |> expect(:add, 0, fn x, y -> x + y end)
+
+      msg = ~r"expected CalcMock.add/2 to be called 0 times but it has been called once"
+      assert_raise Mox.UnexpectedCallError, msg, fn ->
+        CalcMock.add(2, 3) == 5
+      end
+    end
+
     test "can be recharged" do
       expect(CalcMock, :add, fn x, y -> x + y end)
       assert CalcMock.add(2, 3) == 5
