@@ -1,5 +1,7 @@
 # Mox
 
+[![Hex.pm](https://img.shields.io/hexpm/v/mox.svg?style=flat-square)](https://hex.pm/packages/mox)
+
 Mox is a library for defining concurrent mocks in Elixir.
 
 The library follows the principles outlined in ["Mocks and explicit contracts"](http://blog.plataformatec.com.br/2015/10/mocks-and-explicit-contracts/), summarized below:
