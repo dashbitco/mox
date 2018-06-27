@@ -207,11 +207,11 @@ defmodule Mox do
   @doc """
   Defines a mock with the given name `:for` the given behaviour(s).
 
-      Mox.defmock MyMock, for: MyBehaviour
+      Mox.defmock(MyMock, for: MyBehaviour)
 
   With multiple behaviours:
 
-      Mox.defmock MyMock, for: [MyBehaviour, MyOtherBehaviour]
+      Mox.defmock(MyMock, for: [MyBehaviour, MyOtherBehaviour])
 
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
@@ -466,6 +466,12 @@ defmodule Mox do
 
   @doc """
   Verifies the current process after it exits.
+
+  If you want to verify expectations for all tests, you can use
+  `verify_on_exit!/1` as a setup callback:
+
+      setup :verify_on_exit!
+
   """
   def verify_on_exit!(_context \\ %{}) do
     pid = self()
