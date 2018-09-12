@@ -595,6 +595,57 @@ defmodule MoxTest do
       assert CalcMock.add(1, 1) == 2
     end
 
+    test "allowances support locally registered processes" do
+      parent_pid = self()
+      process_name = :test_process
+
+      {:ok, child_pid} =
+        Task.start_link(fn ->
+          receive do
+            :call_mock ->
+              add_result = CalcMock.add(1, 1)
+              send(parent_pid, {:verify, add_result})
+          end
+        end)
+
+      Process.register(child_pid, process_name)
+
+      CalcMock
+      |> expect(:add, fn _, _ -> :expected end)
+      |> allow(self(), process_name)
+
+      send(:test_process, :call_mock)
+
+      assert_receive {:verify, add_result}
+      assert add_result == :expected
+    end
+
+    test "allowances support processes registered through a Registry" do
+      defmodule CalculatorServer do
+        use GenServer
+
+        def init(args) do
+          {:ok, args}
+        end
+
+        def handle_call(:call_mock, _from, []) do
+          add_result = CalcMock.add(1, 1)
+          {:reply, add_result, []}
+        end
+      end
+
+      {:ok, _} = Registry.start_link(keys: :unique, name: Registry.Test)
+      name = {:via, Registry, {Registry.Test, :test_process}}
+      {:ok, _} = GenServer.start_link(CalculatorServer, [], name: name)
+
+      CalcMock
+      |> expect(:add, fn _, _ -> :expected end)
+      |> allow(self(), name)
+
+      add_result = GenServer.call(name, :call_mock)
+      assert add_result == :expected
+    end
+
     test "raises if you try to allow itself" do
       assert_raise ArgumentError, "owner_pid and allowed_pid must be different", fn ->
         CalcMock
