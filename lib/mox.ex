@@ -427,18 +427,18 @@ defmodule Mox do
 
       allow(MyMock, self(), child_pid)
 
+  `allow/3` also accepts named process or via references:
+
+      allow(MyMock, self(), SomeChildProcess)
+
   """
-  def allow(_mock, owner_pid, allowed_pid) when owner_pid == allowed_pid do
-    raise ArgumentError, "owner_pid and allowed_pid must be different"
-  end
+  def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
+    allowed_pid = GenServer.whereis(allowed_via)
 
-  def allow(mock, owner_pid, allowed_name) when is_atom(allowed_name) or is_tuple(allowed_name)  do
-    allowed_pid = GenServer.whereis(allowed_name)
-    allow(mock, owner_pid, allowed_pid)
-  end
+    if allowed_pid == owner_pid do
+      raise ArgumentError, "owner_pid and allowed_pid must be different"
+    end
 
-  def allow(mock, owner_pid, allowed_pid)
-      when is_atom(mock) and is_pid(owner_pid) and is_pid(allowed_pid) do
     case Mox.Server.allow(mock, owner_pid, allowed_pid) do
       :ok ->
         mock
