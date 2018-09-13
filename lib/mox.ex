@@ -432,6 +432,11 @@ defmodule Mox do
     raise ArgumentError, "owner_pid and allowed_pid must be different"
   end
 
+  def allow(mock, owner_pid, allowed_name) when is_atom(allowed_name) or is_tuple(allowed_name)  do
+    allowed_pid = GenServer.whereis(allowed_name)
+    allow(mock, owner_pid, allowed_pid)
+  end
+
   def allow(mock, owner_pid, allowed_pid)
       when is_atom(mock) and is_pid(owner_pid) and is_pid(allowed_pid) do
     case Mox.Server.allow(mock, owner_pid, allowed_pid) do
