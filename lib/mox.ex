@@ -216,7 +216,10 @@ defmodule Mox do
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
     behaviours =
-      options[:for] |> List.wrap() || raise ArgumentError, ":for option is required on defmock"
+      case Keyword.fetch(options, :for) do
+        {:ok, mocks} -> List.wrap(mocks)
+        :error -> raise ArgumentError, ":for option is required on defmock"
+      end
 
     compile_header = generate_compile_time_dependency(behaviours)
     mock_funs = generate_mock_funs(behaviours)
