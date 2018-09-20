@@ -36,6 +36,12 @@ defmodule MoxTest do
       end
     end
 
+    test "raises if :for is missing" do
+      assert_raise ArgumentError, ":for option is required on defmock", fn ->
+        defmock(MyMock, [])
+      end
+    end
+
     test "accepts a list of behaviours" do
       assert defmock(MyMock, for: [Calculator, ScientificCalculator])
     end
@@ -90,6 +96,7 @@ defmodule MoxTest do
       |> expect(:add, 0, fn x, y -> x + y end)
 
       msg = ~r"expected CalcMock.add/2 to be called 0 times but it has been called once"
+
       assert_raise Mox.UnexpectedCallError, msg, fn ->
         CalcMock.add(2, 3) == 5
       end
