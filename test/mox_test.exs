@@ -715,15 +715,13 @@ defmodule MoxTest do
       end
     end
 
-    test "raises if you try to allow process while in global mode" do
+    test "is ignored if you allow process while in global mode" do
       set_mox_global()
       {:ok, child_pid} = Task.start_link(fn -> Process.sleep(:infinity) end)
 
       Task.async(fn ->
-        assert_raise ArgumentError, ~r"already has access to all defined expectations", fn ->
-          CalcMock
-          |> allow(self(), child_pid)
-        end
+        mock = CalcMock
+        assert allow(mock, self(), child_pid) == mock
       end)
       |> Task.await()
     end

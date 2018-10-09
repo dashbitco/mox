@@ -464,11 +464,8 @@ defmodule Mox do
         """
 
       {:error, :in_global_mode} ->
-        raise ArgumentError, """
-        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)} \
-        because Mox is in global mode, the process already has access to all \
-        defined expectations/stubs
-        """
+        # Already allowed
+        mock
     end
   end
 
