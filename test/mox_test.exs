@@ -91,49 +91,51 @@ defmodule MoxTest do
       assert CalcMock.mult(3, 2) == 6
     end
 
-    # TODO: Only run this test on Elixir 1.8
     test "is invoked n times by any process in private mode on Elixir 1.8" do
-      set_mox_private()
+      if caller_tracking_supported?() do
+        set_mox_private()
 
-      CalcMock
-      |> expect(:add, 2, fn x, y -> x + y end)
-      |> expect(:mult, fn x, y -> x * y end)
-      |> expect(:add, fn _, _ -> 0 end)
+        CalcMock
+        |> expect(:add, 2, fn x, y -> x + y end)
+        |> expect(:mult, fn x, y -> x * y end)
+        |> expect(:add, fn _, _ -> 0 end)
 
-      task =
-        Task.async(fn ->
-          assert CalcMock.add(2, 3) == 5
-          assert CalcMock.add(3, 2) == 5
-        end)
-
-      Task.await(task)
-
-      assert CalcMock.add(:whatever, :whatever) == 0
-      assert CalcMock.mult(3, 2) == 6
-    end
-
-    # TODO: Only run this test on Elixir 1.8
-    test "is invoked n times by a sub-process in private mode on Elixir 1.8" do
-      set_mox_private()
-
-      CalcMock
-      |> expect(:add, 2, fn x, y -> x + y end)
-      |> expect(:mult, fn x, y -> x * y end)
-      |> expect(:add, fn _, _ -> 0 end)
-
-      task =
-        Task.async(fn ->
-          assert CalcMock.add(2, 3) == 5
-          assert CalcMock.add(3, 2) == 5
-          inner_task = Task.async(fn ->
-            assert CalcMock.add(:whatever, :whatever) == 0
-            assert CalcMock.mult(3, 2) == 6
+        task =
+          Task.async(fn ->
+            assert CalcMock.add(2, 3) == 5
+            assert CalcMock.add(3, 2) == 5
           end)
 
-          Task.await(inner_task)
-        end)
+        Task.await(task)
 
-      Task.await(task)
+        assert CalcMock.add(:whatever, :whatever) == 0
+        assert CalcMock.mult(3, 2) == 6
+      end
+    end
+
+    test "is invoked n times by a sub-process in private mode on Elixir 1.8" do
+      if caller_tracking_supported?() do
+        set_mox_private()
+
+        CalcMock
+        |> expect(:add, 2, fn x, y -> x + y end)
+        |> expect(:mult, fn x, y -> x * y end)
+        |> expect(:add, fn _, _ -> 0 end)
+
+        task =
+          Task.async(fn ->
+            assert CalcMock.add(2, 3) == 5
+            assert CalcMock.add(3, 2) == 5
+            inner_task = Task.async(fn ->
+              assert CalcMock.add(:whatever, :whatever) == 0
+              assert CalcMock.mult(3, 2) == 6
+            end)
+
+            Task.await(inner_task)
+          end)
+
+        Task.await(task)
+      end
     end
 
     test "allows asserting that function is not called" do
@@ -773,9 +775,19 @@ defmodule MoxTest do
   end
 
   defp assert_default_raise(exception, fun) do
-    # If $callers is defined then we are on Elixir 1.8+ and there is an automatic allowance
-    unless Process.get(:"$callers") do
+    unless caller_tracking_supported?() do
       assert_raise exception, fun
     end
+  end
+
+  defp caller_tracking_supported? do
+    task = Task.async(fn ->
+      case Process.get(:"$callers") do
+        nil -> false
+        [_pid] -> true
+      end
+    end)
+
+    Task.await(task)
   end
 end
