@@ -132,6 +132,11 @@ defmodule Mox do
         |> Task.await
       end
 
+  Note: if you're running on Elixir 1.8.0 or greater and your concurrency comes
+  from a `Task` then you don't need to add explicit allowances. Instead
+  `$callers` is used to determine the process that actually defined the
+  expectations.
+
   ### Global mode
 
   Mox supports global mode, where any process can consume mocks and stubs
