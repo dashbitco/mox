@@ -91,6 +91,51 @@ defmodule MoxTest do
       assert CalcMock.mult(3, 2) == 6
     end
 
+    # TODO: Only run this test on Elixir 1.8
+    test "is invoked n times by any process in private mode on Elixir 1.8" do
+      set_mox_private()
+
+      CalcMock
+      |> expect(:add, 2, fn x, y -> x + y end)
+      |> expect(:mult, fn x, y -> x * y end)
+      |> expect(:add, fn _, _ -> 0 end)
+
+      task =
+        Task.async(fn ->
+          assert CalcMock.add(2, 3) == 5
+          assert CalcMock.add(3, 2) == 5
+        end)
+
+      Task.await(task)
+
+      assert CalcMock.add(:whatever, :whatever) == 0
+      assert CalcMock.mult(3, 2) == 6
+    end
+
+    # TODO: Only run this test on Elixir 1.8
+    test "is invoked n times by a sub-process in private mode on Elixir 1.8" do
+      set_mox_private()
+
+      CalcMock
+      |> expect(:add, 2, fn x, y -> x + y end)
+      |> expect(:mult, fn x, y -> x * y end)
+      |> expect(:add, fn _, _ -> 0 end)
+
+      task =
+        Task.async(fn ->
+          assert CalcMock.add(2, 3) == 5
+          assert CalcMock.add(3, 2) == 5
+          inner_task = Task.async(fn ->
+            assert CalcMock.add(:whatever, :whatever) == 0
+            assert CalcMock.mult(3, 2) == 6
+          end)
+
+          Task.await(inner_task)
+        end)
+
+      Task.await(task)
+    end
+
     test "allows asserting that function is not called" do
       CalcMock
       |> expect(:add, 0, fn x, y -> x + y end)
@@ -495,7 +540,7 @@ defmodule MoxTest do
 
       {:ok, child_pid} =
         Task.start_link(fn ->
-          assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+          assert_default_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
 
           receive do
             :call_mock ->
@@ -525,7 +570,7 @@ defmodule MoxTest do
       |> stub(:mult, fn _, _ -> :stubbed end)
 
       Task.async(fn ->
-        assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+        assert_default_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
 
         CalcMock
         |> allow(parent_pid, self())
@@ -541,7 +586,7 @@ defmodule MoxTest do
 
       {:ok, child_pid} =
         Task.start_link(fn ->
-          assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+          assert_default_raise(Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end)
 
           receive do
             :call_mock ->
@@ -724,6 +769,13 @@ defmodule MoxTest do
         assert allow(mock, self(), child_pid) == mock
       end)
       |> Task.await()
+    end
+  end
+
+  defp assert_default_raise(exception, fun) do
+    # If $callers is defined then we are on Elixir 1.8+ and there is an automatic allowance
+    unless Process.get(:"$callers") do
+      assert_raise exception, fun
     end
   end
 end

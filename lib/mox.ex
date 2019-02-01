@@ -537,7 +537,7 @@ defmodule Mox do
 
   @doc false
   def __dispatch__(mock, name, arity, args) do
-    case Mox.Server.fetch_fun_to_dispatch(self(), {mock, name, arity}) do
+    case Mox.Server.fetch_fun_to_dispatch(caller_pid(), {mock, name, arity}) do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
 
@@ -558,4 +558,12 @@ defmodule Mox do
 
   defp times(1), do: "once"
   defp times(n), do: "#{n} times"
+
+  # Find the pid of the actual caller
+  defp caller_pid do
+    case Process.get(:"$callers") do
+      nil -> self()
+      pids when is_list(pids) -> List.last(pids)
+    end
+  end
 end

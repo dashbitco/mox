@@ -6,6 +6,9 @@ matrix:
   include:
     - elixir: 1.5.2
       otp_release: 20.0
+  include:
+    - elixir: 1.8.1
+      otp_release: 21.2
 notifications:
   recipients:
     - jose.valim@plataformatec.com.br
