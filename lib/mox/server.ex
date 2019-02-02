@@ -14,8 +14,8 @@ defmodule Mox.Server do
     GenServer.call(__MODULE__, {:add_expectation, owner_pid, key, value}, @timeout)
   end
 
-  def fetch_fun_to_dispatch(caller_pid, key) do
-    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, caller_pid, key}, @timeout)
+  def fetch_fun_to_dispatch(caller_pids, key) do
+    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, caller_pids, key}, @timeout)
   end
 
   def verify(owner_pid, for) do
@@ -81,11 +81,22 @@ defmodule Mox.Server do
   end
 
   def handle_call(
-        {:fetch_fun_to_dispatch, caller_pid, {mock, _, _} = key},
+        {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key},
         _from,
         %{mode: :private} = state
       ) do
-    owner_pid = state.allowances[caller_pid][mock] || caller_pid
+    owner_pid = Enum.find_value(caller_pids, List.first(caller_pids), fn caller_pid ->
+      cond do
+        state.allowances[caller_pid][mock] ->
+          state.allowances[caller_pid][mock]
+
+        state.expectations[caller_pid][key] ->
+          caller_pid
+
+        true ->
+          false
+      end
+    end)
 
     case state.expectations[owner_pid][key] do
       nil ->
@@ -104,7 +115,7 @@ defmodule Mox.Server do
   end
 
   def handle_call(
-        {:fetch_fun_to_dispatch, _caller_pid, {_mock, _, _} = key},
+        {:fetch_fun_to_dispatch, _caller_pids, {_mock, _, _} = key},
         _from,
         %{mode: :global} = state
       ) do
