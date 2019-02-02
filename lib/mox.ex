@@ -549,14 +549,14 @@ defmodule Mox do
         mfa = Exception.format_mfa(mock, name, arity)
 
         raise UnexpectedCallError,
-              "no expectation defined for #{mfa} in process #{inspect(self())}"
+              "no expectation defined for #{mfa} in #{format_process()}"
 
       {:out_of_expectations, count} ->
         mfa = Exception.format_mfa(mock, name, arity)
 
         raise UnexpectedCallError,
               "expected #{mfa} to be called #{times(count)} but it has been " <>
-                "called #{times(count + 1)} in process #{inspect(self())}"
+                "called #{times(count + 1)} in process #{format_process()}"
 
       {:ok, fun_to_call} ->
         apply(fun_to_call, args)
@@ -566,11 +566,22 @@ defmodule Mox do
   defp times(1), do: "once"
   defp times(n), do: "#{n} times"
 
+  defp format_process do
+    callers = caller_pids()
+
+    "process #{inspect(self())}" <>
+      if Enum.empty?(callers) do
+        ""
+      else
+        " (or in its callers #{inspect callers})"
+      end
+  end
+
   # Find the pid of the actual caller
   defp caller_pids do
     case Process.get(:"$callers") do
-      nil -> [self()]
-      pids when is_list(pids) -> [self() | pids]
+      nil -> []
+      pids when is_list(pids) -> pids
     end
   end
 end
