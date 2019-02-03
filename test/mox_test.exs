@@ -539,8 +539,8 @@ defmodule MoxTest do
       parent_pid = self()
 
       {:ok, child_pid} =
-        Task.start_link(fn ->
-          assert_default_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+        start_link_no_callers(fn ->
+          assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
 
           receive do
             :call_mock ->
@@ -569,8 +569,8 @@ defmodule MoxTest do
       |> expect(:add, fn _, _ -> :expected end)
       |> stub(:mult, fn _, _ -> :stubbed end)
 
-      Task.async(fn ->
-        assert_default_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+      async_no_callers(fn ->
+        assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
 
         CalcMock
         |> allow(parent_pid, self())
@@ -585,8 +585,8 @@ defmodule MoxTest do
       parent_pid = self()
 
       {:ok, child_pid} =
-        Task.start_link(fn ->
-          assert_default_raise(Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end)
+        start_link_no_callers(fn ->
+          assert_raise(Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end)
 
           receive do
             :call_mock ->
@@ -772,9 +772,17 @@ defmodule MoxTest do
     end
   end
 
-  defp assert_default_raise(exception, fun) do
-    unless Process.get(:"$callers") != nil do
-      assert_raise exception, fun
-    end
+  defp async_no_callers(fun) do
+    Task.async(fn ->
+      Process.delete(:"$callers")
+      fun.()
+    end)
+  end
+
+  defp start_link_no_callers(fun) do
+    Task.start_link(fn ->
+      Process.delete(:"$callers")
+      fun.()
+    end)
   end
 end

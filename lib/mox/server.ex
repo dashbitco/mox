@@ -85,18 +85,14 @@ defmodule Mox.Server do
         _from,
         %{mode: :private} = state
       ) do
-    owner_pid = Enum.find_value(caller_pids, List.first(caller_pids), fn caller_pid ->
-      cond do
-        state.allowances[caller_pid][mock] ->
-          state.allowances[caller_pid][mock]
-
-        state.expectations[caller_pid][key] ->
-          caller_pid
-
-        true ->
-          false
-      end
-    end)
+    owner_pid =
+      Enum.find_value(caller_pids, List.first(caller_pids), fn caller_pid ->
+        cond do
+          state.allowances[caller_pid][mock] -> state.allowances[caller_pid][mock]
+          state.expectations[caller_pid][key] -> caller_pid
+          true -> false
+        end
+      end)
 
     case state.expectations[owner_pid][key] do
       nil ->
