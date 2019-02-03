@@ -132,6 +132,11 @@ defmodule Mox do
         |> Task.await
       end
 
+  Note: if you're running on Elixir 1.8.0 or greater and your concurrency comes
+  from a `Task` then you don't need to add explicit allowances. Instead
+  `$callers` is used to determine the process that actually defined the
+  expectations.
+
   ### Global mode
 
   Mox supports global mode, where any process can consume mocks and stubs
@@ -537,19 +542,21 @@ defmodule Mox do
 
   @doc false
   def __dispatch__(mock, name, arity, args) do
-    case Mox.Server.fetch_fun_to_dispatch(self(), {mock, name, arity}) do
+    all_callers = [self() | caller_pids()]
+
+    case Mox.Server.fetch_fun_to_dispatch(all_callers, {mock, name, arity}) do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
 
         raise UnexpectedCallError,
-              "no expectation defined for #{mfa} in process #{inspect(self())}"
+              "no expectation defined for #{mfa} in #{format_process()}"
 
       {:out_of_expectations, count} ->
         mfa = Exception.format_mfa(mock, name, arity)
 
         raise UnexpectedCallError,
               "expected #{mfa} to be called #{times(count)} but it has been " <>
-                "called #{times(count + 1)} in process #{inspect(self())}"
+                "called #{times(count + 1)} in process #{format_process()}"
 
       {:ok, fun_to_call} ->
         apply(fun_to_call, args)
@@ -558,4 +565,23 @@ defmodule Mox do
 
   defp times(1), do: "once"
   defp times(n), do: "#{n} times"
+
+  defp format_process do
+    callers = caller_pids()
+
+    "process #{inspect(self())}" <>
+      if Enum.empty?(callers) do
+        ""
+      else
+        " (or in its callers #{inspect callers})"
+      end
+  end
+
+  # Find the pid of the actual caller
+  defp caller_pids do
+    case Process.get(:"$callers") do
+      nil -> []
+      pids when is_list(pids) -> pids
+    end
+  end
 end

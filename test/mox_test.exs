@@ -91,6 +91,51 @@ defmodule MoxTest do
       assert CalcMock.mult(3, 2) == 6
     end
 
+    @tag :requires_caller_tracking
+    test "is invoked n times by any process in private mode on Elixir 1.8" do
+      set_mox_private()
+
+      CalcMock
+      |> expect(:add, 2, fn x, y -> x + y end)
+      |> expect(:mult, fn x, y -> x * y end)
+      |> expect(:add, fn _, _ -> 0 end)
+
+      task =
+        Task.async(fn ->
+          assert CalcMock.add(2, 3) == 5
+          assert CalcMock.add(3, 2) == 5
+        end)
+
+      Task.await(task)
+
+      assert CalcMock.add(:whatever, :whatever) == 0
+      assert CalcMock.mult(3, 2) == 6
+    end
+
+    @tag :requires_caller_tracking
+    test "is invoked n times by a sub-process in private mode on Elixir 1.8" do
+      set_mox_private()
+
+      CalcMock
+      |> expect(:add, 2, fn x, y -> x + y end)
+      |> expect(:mult, fn x, y -> x * y end)
+      |> expect(:add, fn _, _ -> 0 end)
+
+      task =
+        Task.async(fn ->
+          assert CalcMock.add(2, 3) == 5
+          assert CalcMock.add(3, 2) == 5
+          inner_task = Task.async(fn ->
+            assert CalcMock.add(:whatever, :whatever) == 0
+            assert CalcMock.mult(3, 2) == 6
+          end)
+
+          Task.await(inner_task)
+        end)
+
+      Task.await(task)
+    end
+
     test "allows asserting that function is not called" do
       CalcMock
       |> expect(:add, 0, fn x, y -> x + y end)
@@ -494,7 +539,7 @@ defmodule MoxTest do
       parent_pid = self()
 
       {:ok, child_pid} =
-        Task.start_link(fn ->
+        start_link_no_callers(fn ->
           assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
 
           receive do
@@ -524,7 +569,7 @@ defmodule MoxTest do
       |> expect(:add, fn _, _ -> :expected end)
       |> stub(:mult, fn _, _ -> :stubbed end)
 
-      Task.async(fn ->
+      async_no_callers(fn ->
         assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
 
         CalcMock
@@ -540,8 +585,8 @@ defmodule MoxTest do
       parent_pid = self()
 
       {:ok, child_pid} =
-        Task.start_link(fn ->
-          assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
+        start_link_no_callers(fn ->
+          assert_raise(Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end)
 
           receive do
             :call_mock ->
@@ -725,5 +770,19 @@ defmodule MoxTest do
       end)
       |> Task.await()
     end
+  end
+
+  defp async_no_callers(fun) do
+    Task.async(fn ->
+      Process.delete(:"$callers")
+      fun.()
+    end)
+  end
+
+  defp start_link_no_callers(fun) do
+    Task.start_link(fn ->
+      Process.delete(:"$callers")
+      fun.()
+    end)
   end
 end
