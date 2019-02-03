@@ -1,7 +1,9 @@
-# Changelog for 0.5
+# Changelog
 
-## unreleased
+## v0.5.0 (2019-02-03)
 
-### 1. Enhancements
+### Enhancements
 
-* When on Elixir 1.8 use `$callers` to automatically use expectations defined in the calling process
+  * Use `$callers` to automatically use expectations defined in the calling process (`$callers` is set automatically by tasks in Elixir v1.8 onwards)
+  * Creating an allowance in global mode is now a no-op for convenience
+  * Support registered process names for allowances
