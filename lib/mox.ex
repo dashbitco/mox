@@ -549,7 +549,7 @@ defmodule Mox do
         mfa = Exception.format_mfa(mock, name, arity)
 
         raise UnexpectedCallError,
-              "no expectation defined for #{mfa} in #{format_process()}"
+              "no expectation defined for #{mfa} in #{format_process()} with args #{inspect(args)}"
 
       {:out_of_expectations, count} ->
         mfa = Exception.format_mfa(mock, name, arity)
@@ -573,7 +573,7 @@ defmodule Mox do
       if Enum.empty?(callers) do
         ""
       else
-        " (or in its callers #{inspect callers})"
+        " (or in its callers #{inspect(callers)})"
       end
   end
 
