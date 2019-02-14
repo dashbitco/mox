@@ -125,10 +125,12 @@ defmodule MoxTest do
         Task.async(fn ->
           assert CalcMock.add(2, 3) == 5
           assert CalcMock.add(3, 2) == 5
-          inner_task = Task.async(fn ->
-            assert CalcMock.add(:whatever, :whatever) == 0
-            assert CalcMock.mult(3, 2) == 6
-          end)
+
+          inner_task =
+            Task.async(fn ->
+              assert CalcMock.add(:whatever, :whatever) == 0
+              assert CalcMock.mult(3, 2) == 6
+            end)
 
           Task.await(inner_task)
         end)
@@ -198,9 +200,11 @@ defmodule MoxTest do
     end
 
     test "raises if there is no expectation" do
-      assert_raise Mox.UnexpectedCallError, ~r"no expectation defined for CalcMock\.add/2", fn ->
-        CalcMock.add(2, 3) == 5
-      end
+      assert_raise Mox.UnexpectedCallError,
+                   ~r"no expectation defined for CalcMock\.add/2.*with args \[2, 3\]",
+                   fn ->
+                     CalcMock.add(2, 3) == 5
+                   end
     end
 
     test "raises if all expectations are consumed" do
