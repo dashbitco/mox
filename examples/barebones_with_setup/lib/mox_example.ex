@@ -1,9 +1,9 @@
 defmodule MoxExample do
   @example_api Application.get_env(
-                                          :mox_example,
-                                          :example_api,
-                                          ExampleAPI
-                                        )
+                 :mox_example,
+                 :example_api,
+                 ExampleAPI
+               )
   def post_name(name) do
     # run api-post/3 in our currently selected implementation
     @example_api.api_post(name, [], [])
