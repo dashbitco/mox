@@ -20,10 +20,9 @@ defmodule MoxExample.MixProject do
     ]
   end
 
-	# ensure test/support is compiled
-	defp elixirc_paths(:test), do: ["lib", "test/support"]
+  # ensure test/support is compiled
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
-
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
