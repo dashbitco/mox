@@ -218,6 +218,18 @@ defmodule Mox do
 
       Mox.defmock(MyMock, for: [MyBehaviour, MyOtherBehaviour])
 
+  ## Skipping optional callbacks
+
+  By default, functions are created for all callbacks, including all optional
+  callbacks. But if for some reason you want to skip optional callbacks, you can
+  provide the list of callback names to skip (along with their arities) as
+  `:skip_optional_callbacks`:
+
+      Mox.defmock(MyMock, for: MyBehaviour, skip_optional_callbacks: [on_success: 2])
+
+  This will define a new mock (`MyMock`) that has a defined function for each
+  callback on `MyBehaviour` except for `on_success/2`. Note: you can only skip
+  optional callbacks, not required callbacks.
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
     behaviours =
@@ -226,8 +238,15 @@ defmodule Mox do
         :error -> raise ArgumentError, ":for option is required on defmock"
       end
 
+    skip_optional_callbacks =
+      case Keyword.get(options, :skip_optional_callbacks, []) do
+        skip_list when is_list(skip_list) -> skip_list
+        _ -> raise ArgumentError, ":skip_optional_callbacks is required to be a list"
+      end
+
     compile_header = generate_compile_time_dependency(behaviours)
-    mock_funs = generate_mock_funs(behaviours)
+    validate_skip_optional_callbacks!(behaviours, skip_optional_callbacks)
+    mock_funs = generate_mock_funs(behaviours, skip_optional_callbacks)
     define_mock_module(name, behaviours, compile_header ++ mock_funs)
     name
   end
@@ -257,9 +276,10 @@ defmodule Mox do
     end
   end
 
-  defp generate_mock_funs(behaviours) do
+  defp generate_mock_funs(behaviours, skip_optional_callbacks) do
     for behaviour <- behaviours,
-        {fun, arity} <- behaviour.behaviour_info(:callbacks) do
+        {fun, arity} <- behaviour.behaviour_info(:callbacks),
+        {fun, arity} not in skip_optional_callbacks do
       args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
 
       quote do
@@ -267,6 +287,21 @@ defmodule Mox do
           Mox.__dispatch__(__MODULE__, unquote(fun), unquote(arity), unquote(args))
         end
       end
+    end
+  end
+
+  defp validate_skip_optional_callbacks!(behaviours, skip_optional_callbacks) do
+    all_optional_callbacks =
+      for behaviour <- behaviours,
+          {fun, arity} <- behaviour.behaviour_info(:optional_callbacks) do
+        {fun, arity}
+      end
+
+    for callback <- skip_optional_callbacks, callback not in all_optional_callbacks do
+      raise ArgumentError,
+            "All entries in :skip_optional_callbacks must be an optional callback in one of the behaviours specified in :for. #{
+              inspect(callback)
+            } was not in the list of all optional callbacks: #{inspect(all_optional_callbacks)}"
     end
   end
 
