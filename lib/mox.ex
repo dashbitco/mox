@@ -299,9 +299,9 @@ defmodule Mox do
 
     for callback <- skip_optional_callbacks, callback not in all_optional_callbacks do
       raise ArgumentError,
-            "All entries in :skip_optional_callbacks must be an optional callback in one of the behaviours specified in :for. #{
-              inspect(callback)
-            } was not in the list of all optional callbacks: #{inspect(all_optional_callbacks)}"
+            "all entries in :skip_optional_callbacks must be an optional callback in one " <>
+              "of the behaviours specified in :for. #{inspect(callback)} was not in the " <>
+              "list of all optional callbacks: #{inspect(all_optional_callbacks)}"
     end
   end
 
