@@ -60,15 +60,27 @@ defmodule MoxTest do
       assert all_callbacks -- MyMultiMock.__info__(:functions) == [sin: 1]
     end
 
-    test "raises if :skip_optional_callbacks is not a list" do
-      assert_raise ArgumentError, ":skip_optional_callbacks is required to be a list", fn ->
-        defmock(MyMock, for: Calculator, skip_optional_callbacks: false)
+    test "accepts false to indicate all functions should be generated" do
+      defmock(MyFalseMock, for: [Calculator, ScientificCalculator], skip_optional_callbacks: false)
+      all_callbacks = ScientificCalculator.behaviour_info(:callbacks)
+      assert all_callbacks -- MyFalseMock.__info__(:functions) == []
+    end
+
+    test "accepts true to indicate no optional functions should be generated" do
+      defmock(MyTrueMock, for: [Calculator, ScientificCalculator], skip_optional_callbacks: true)
+      all_callbacks = ScientificCalculator.behaviour_info(:callbacks)
+      assert all_callbacks -- MyTrueMock.__info__(:functions) == [sin: 1]
+    end
+
+    test "raises if :skip_optional_callbacks is not a list or boolean" do
+      assert_raise ArgumentError, ":skip_optional_callbacks is required to be a list or boolean", fn ->
+        defmock(MyMock, for: Calculator, skip_optional_callbacks: 42)
       end
     end
 
     test "raises if a callback in :skip_optional_callbacks does not exist" do
       expected_error =
-        "All entries in :skip_optional_callbacks must be an optional callback in" <>
+        "all entries in :skip_optional_callbacks must be an optional callback in" <>
           " one of the behaviours specified in :for. {:some_other_function, 0} was not in the list" <>
           " of all optional callbacks: []"
 
@@ -82,7 +94,7 @@ defmodule MoxTest do
 
     test "raises if a callback in :skip_optional_callbacks is not an optional callback" do
       expected_error =
-        "All entries in :skip_optional_callbacks must be an optional callback in" <>
+        "all entries in :skip_optional_callbacks must be an optional callback in" <>
         " one of the behaviours specified in :for. {:exponent, 2} was not in the list" <>
         " of all optional callbacks: [sin: 1]"
 

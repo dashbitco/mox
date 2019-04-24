@@ -230,6 +230,9 @@ defmodule Mox do
   This will define a new mock (`MyMock`) that has a defined function for each
   callback on `MyBehaviour` except for `on_success/2`. Note: you can only skip
   optional callbacks, not required callbacks.
+
+  You can also pass `true` to skip all optional callbacks, or `false` to keep
+  the default of generating functions for all optional callbacks.
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
     behaviours =
@@ -238,15 +241,11 @@ defmodule Mox do
         :error -> raise ArgumentError, ":for option is required on defmock"
       end
 
-    skip_optional_callbacks =
-      case Keyword.get(options, :skip_optional_callbacks, []) do
-        skip_list when is_list(skip_list) -> skip_list
-        _ -> raise ArgumentError, ":skip_optional_callbacks is required to be a list"
-      end
+    skip_optional_callbacks = Keyword.get(options, :skip_optional_callbacks, [])
 
     compile_header = generate_compile_time_dependency(behaviours)
-    validate_skip_optional_callbacks!(behaviours, skip_optional_callbacks)
-    mock_funs = generate_mock_funs(behaviours, skip_optional_callbacks)
+    callbacks_to_skip = validate_skip_optional_callbacks!(behaviours, skip_optional_callbacks)
+    mock_funs = generate_mock_funs(behaviours, callbacks_to_skip)
     define_mock_module(name, behaviours, compile_header ++ mock_funs)
     name
   end
@@ -276,10 +275,10 @@ defmodule Mox do
     end
   end
 
-  defp generate_mock_funs(behaviours, skip_optional_callbacks) do
+  defp generate_mock_funs(behaviours, callbacks_to_skip) do
     for behaviour <- behaviours,
         {fun, arity} <- behaviour.behaviour_info(:callbacks),
-        {fun, arity} not in skip_optional_callbacks do
+        {fun, arity} not in callbacks_to_skip do
       args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
 
       quote do
@@ -297,11 +296,25 @@ defmodule Mox do
         {fun, arity}
       end
 
-    for callback <- skip_optional_callbacks, callback not in all_optional_callbacks do
-      raise ArgumentError,
+    case skip_optional_callbacks do
+      false ->
+        []
+
+      true ->
+        all_optional_callbacks
+
+      skip_list when is_list(skip_list) ->
+        for callback <- skip_optional_callbacks, callback not in all_optional_callbacks do
+          raise ArgumentError,
             "all entries in :skip_optional_callbacks must be an optional callback in one " <>
-              "of the behaviours specified in :for. #{inspect(callback)} was not in the " <>
-              "list of all optional callbacks: #{inspect(all_optional_callbacks)}"
+            "of the behaviours specified in :for. #{inspect(callback)} was not in the " <>
+            "list of all optional callbacks: #{inspect(all_optional_callbacks)}"
+        end
+
+        skip_list
+
+      _ ->
+        raise ArgumentError, ":skip_optional_callbacks is required to be a list or boolean"
     end
   end
 
