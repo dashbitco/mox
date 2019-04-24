@@ -306,9 +306,9 @@ defmodule Mox do
       skip_list when is_list(skip_list) ->
         for callback <- skip_optional_callbacks, callback not in all_optional_callbacks do
           raise ArgumentError,
-            "all entries in :skip_optional_callbacks must be an optional callback in one " <>
-            "of the behaviours specified in :for. #{inspect(callback)} was not in the " <>
-            "list of all optional callbacks: #{inspect(all_optional_callbacks)}"
+                "all entries in :skip_optional_callbacks must be an optional callback in one " <>
+                  "of the behaviours specified in :for. #{inspect(callback)} was not in the " <>
+                  "list of all optional callbacks: #{inspect(all_optional_callbacks)}"
         end
 
         skip_list
