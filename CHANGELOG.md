@@ -4,7 +4,7 @@
 
 ### Enhancements
 
-  * Added `:skip_optional_callbacks` option to `defmock/2` that allows you to optionally skip the definition of optional callbacks.
+  * Add `:skip_optional_callbacks` option to `defmock/2` that allows you to optionally skip the definition of optional callbacks.
 
 ## v0.5.0 (2019-02-03)
 
