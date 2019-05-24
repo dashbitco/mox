@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.5.1 (2019-05-24)
 
 ### Enhancements
 
   * Add `:skip_optional_callbacks` option to `defmock/2` that allows you to optionally skip the definition of optional callbacks.
+  * Include arguments in `UnexpectedCallError` exceptions
 
 ## v0.5.0 (2019-02-03)
 
