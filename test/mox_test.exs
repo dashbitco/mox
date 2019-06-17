@@ -843,6 +843,13 @@ defmodule MoxTest do
     end
   end
 
+  describe "set_mox_global/1" do
+    test "raises if the test case is async" do
+      message = ~r/Mox cannot be set to global mode when the ExUnit case is async/
+      assert_raise RuntimeError, message, fn -> set_mox_global(%{async: true}) end
+    end
+  end
+
   defp async_no_callers(fun) do
     Task.async(fn ->
       Process.delete(:"$callers")
