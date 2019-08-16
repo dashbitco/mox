@@ -241,6 +241,6 @@ defmodule Mox.Server do
   end
 
   defp merge_expectation({current_n, current_calls, current_stub}, {n, calls, stub}) do
-    {current_n + n, current_calls ++ calls, stub || current_stub}
+    {current_n + n, current_calls ++ calls, stub}
   end
 end
