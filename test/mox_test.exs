@@ -292,6 +292,17 @@ defmodule MoxTest do
       end
     end
 
+    test "raises if all expectations are consumed, even when a stub is defined" do
+      stub(CalcMock, :add, fn x, y -> :stub end)
+
+      expect(CalcMock, :add, 1, fn x, y -> :expected end)
+      assert CalcMock.add(2, 3) == :expected
+
+      assert_raise Mox.UnexpectedCallError, fn ->
+        CalcMock.add(2, 3)
+      end
+    end
+
     test "raises if you try to add expectations from non global process" do
       set_mox_global()
 
