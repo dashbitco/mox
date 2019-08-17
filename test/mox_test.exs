@@ -496,7 +496,7 @@ defmodule MoxTest do
       end)
     end
 
-    test "a stub declared after an expect is invoked once all expectations are fulfilled" do
+    test "a stub declared after an expect is invoked after all expectations are fulfilled" do
       in_all_modes(fn ->
         CalcMock
         |> expect(:add, 2, fn _, _ -> :expected end)
