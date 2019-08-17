@@ -359,6 +359,11 @@ defmodule Mox do
   `expect/4` can also be invoked multiple times for the same
   name/arity, allowing you to give different behaviours on each
   invocation.
+
+  When `expect/4` is invoked, any previously declared `stub` for the same `name` and arity will
+  be removed. This ensures that `expect` will fail if the function is called more than `n` times.
+  If a `stub/3` is invoked **after** `expect/4` for the same `name` and arity, the stub will be
+  used after all expectations are fulfilled.
   """
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 0 and is_function(code) do
