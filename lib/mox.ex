@@ -170,6 +170,48 @@ defmodule Mox do
 
       setup :set_mox_from_context
 
+  ### Blocking on expectations
+
+  If your mock is called in a different process than the test process,
+  in some cases there is a chance that the test will finish executing
+  before it has a chance to call the mock and meet the expectations.
+  Imagine this:
+
+      test "calling a mock from a different process" do
+        expect(MyApp.CalcMock, :add, fn x, y -> x + y end)
+
+        spawn(fn -> MyApp.CalcMock.add(4, 2) end)
+
+        verify!()
+      end
+
+  The test above has a race condition because there is a chance that the
+  `verify!/0` call will happen before the spawned process calls the mock.
+  In most cases, you don't control the spawning of the process so you can't
+  simply monitor the process to know when it dies in order to avoid this
+  race condition. In those cases, the way to go is to "sync up" with the
+  process that calls the mock by sending a message to the test process
+  from the expectation and using that to know when the expectation has been
+  called.
+
+      test "calling a mock from a different process" do
+        parent = self()
+        ref = make_ref()
+
+        expect(MyApp.CalcMock, :add, fn x, y ->
+          send(parent, {ref, :add})
+          x + y
+        end)
+
+        spawn(fn -> MyApp.CalcMock.add(4, 2) end)
+
+        assert_receive {^ref, :add}
+
+        verify!()
+      end
+
+  This way, we'll wait until the expectation is called before calling
+  `verify!/0`.
   """
 
   defmodule UnexpectedCallError do
@@ -342,6 +384,15 @@ defmodule Mox do
   Expects the `name` in `mock` with arity given by `code`
   to be invoked `n` times.
 
+  If you're calling your mock from an asynchronous process and want
+  to wait for the mock to be called, see the "Blocking on expectations"
+  section in the module documentation.
+
+  When `expect/4` is invoked, any previously declared `stub` for the same `name` and arity will
+  be removed. This ensures that `expect` will fail if the function is called more than `n` times.
+  If a `stub/3` is invoked **after** `expect/4` for the same `name` and arity, the stub will be
+  used after all expectations are fulfilled.
+
   ## Examples
 
   To expect `MyMock.add/2` to be called once:
@@ -358,12 +409,12 @@ defmodule Mox do
 
   `expect/4` can also be invoked multiple times for the same
   name/arity, allowing you to give different behaviours on each
-  invocation.
+  invocation:
 
-  When `expect/4` is invoked, any previously declared `stub` for the same `name` and arity will
-  be removed. This ensures that `expect` will fail if the function is called more than `n` times.
-  If a `stub/3` is invoked **after** `expect/4` for the same `name` and arity, the stub will be
-  used after all expectations are fulfilled.
+      MyMock
+      |> expect(:add, fn x, y -> x + y end)
+      |> expect(:add, fn x, y -> x * y end)
+
   """
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 0 and is_function(code) do
