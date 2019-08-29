@@ -8,6 +8,7 @@ defmodule Mox.MixProject do
       app: :mox,
       version: @version,
       elixir: "~> 1.5",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       name: "Mox",
       description: "Mocks and explicit contracts for Elixir",
@@ -23,6 +24,9 @@ defmodule Mox.MixProject do
       mod: {Mox.Application, []}
     ]
   end
+
+  defp elixirc_paths(:test), do: ["test/support", "lib"]
+  defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
     [

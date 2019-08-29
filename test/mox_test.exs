@@ -4,20 +4,6 @@ defmodule MoxTest do
   import Mox
   doctest Mox
 
-  defmodule Calculator do
-    @callback add(integer(), integer()) :: integer()
-    @callback mult(integer(), integer()) :: integer()
-  end
-
-  defmodule ScientificCalculator do
-    @callback exponent(integer(), integer()) :: integer()
-    @callback sin(integer()) :: float()
-    @optional_callbacks [sin: 1]
-  end
-
-  defmock(CalcMock, for: Calculator)
-  defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
-
   def in_all_modes(callback) do
     set_mox_global()
     callback.()
