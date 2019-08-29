@@ -296,6 +296,14 @@ defmodule Mox do
 
   You can also pass `true` to skip all optional callbacks, or `false` to keep
   the default of generating functions for all optional callbacks.
+
+  ## Passing `@moduledoc`
+
+  You can provide value for `@moduledoc` with `:moduledoc` option.
+
+      Mox.defmock(MyMock, for: MyBehaviour, moduledoc: false)
+      Mox.defmock(MyMock, for: MyBehaviour, moduledoc: "My mock module.")
+
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
     behaviours =
@@ -305,11 +313,15 @@ defmodule Mox do
       end
 
     skip_optional_callbacks = Keyword.get(options, :skip_optional_callbacks, [])
+    moduledoc = Keyword.get(options, :moduledoc, false)
 
+    doc_header = generate_doc_header(moduledoc)
     compile_header = generate_compile_time_dependency(behaviours)
     callbacks_to_skip = validate_skip_optional_callbacks!(behaviours, skip_optional_callbacks)
     mock_funs = generate_mock_funs(behaviours, callbacks_to_skip)
-    define_mock_module(name, behaviours, compile_header ++ mock_funs)
+
+    define_mock_module(name, behaviours, doc_header ++ compile_header ++ mock_funs)
+
     name
   end
 
@@ -326,6 +338,14 @@ defmodule Mox do
       true ->
         behaviour
     end
+  end
+
+  defp generate_doc_header(moduledoc) do
+    [
+      quote do
+        @moduledoc unquote(moduledoc)
+      end
+    ]
   end
 
   defp generate_compile_time_dependency(behaviours) do

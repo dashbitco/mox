@@ -98,6 +98,19 @@ defmodule MoxTest do
         )
       end
     end
+
+    test "uses false for when moduledoc is not given" do
+      assert {:docs_v1, _, :elixir, "text/markdown", :hidden, _, _} =
+               Code.fetch_docs(MyMockWithoutModuledoc)
+    end
+
+    test "passes value to @moduledoc if moduledoc is given" do
+      assert {:docs_v1, _, :elixir, "text/markdown", :hidden, _, _} =
+               Code.fetch_docs(MyMockWithFalseModuledoc)
+
+      assert {:docs_v1, _, :elixir, "text/markdown", %{"en" => "hello world"}, _, _} =
+               Code.fetch_docs(MyMockWithStringModuledoc)
+    end
   end
 
   describe "expect/4" do
