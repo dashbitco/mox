@@ -65,6 +65,18 @@ defmodule Mox do
   unless the Mox is set to global mode. See the "Multi-process collaboration"
   section.
 
+  Especially if you put the mock into the config/application environment you
+  might want the implementation to fall back to the original implementation
+  when no expectations are defined. `stub_with/2` is just what you need! Given
+  that `MyApp.TestCalculator` is the implementation you are mocking you can
+  do the following in `test_helper.exs` after defining the mock with
+  `defmock/2`:
+
+      Mox.stub_with(MyApp.CalcMock, MyApp.TestCalculator)
+
+  Now, if no expectations are defined it will call the implementation in
+  `MyApp.TestCalculator`.
+
   ## Multiple behaviours
 
   Mox supports defining mocks for multiple behaviours.
