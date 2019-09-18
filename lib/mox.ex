@@ -26,11 +26,12 @@ defmodule Mox do
       end
 
   If you want to mock the calculator behaviour during tests, the first step
-  is to define the mock, usually in your `test_helper.exs`:
+  is to define the mock with `defmock/2`, usually in your `test_helper.exs`:
 
       Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
 
-  Now in your tests, you can define expectations and verify them:
+  Now in your tests, you can define expectations with `expect/4` and verify
+  them via `verify_on_exit!/1`:
 
       use ExUnit.Case, async: true
 
