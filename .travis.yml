@@ -1,5 +1,4 @@
 language: elixir
-sudo: false
 matrix:
   include:
     - elixir: 1.5.2
