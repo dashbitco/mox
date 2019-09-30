@@ -69,8 +69,7 @@ defmodule Mox do
   might want the implementation to fall back to the original implementation
   when no expectations are defined. `stub_with/2` is just what you need! Given
   that `MyApp.TestCalculator` is the implementation you are mocking you can
-  do the following in `test_helper.exs` after defining the mock with
-  `defmock/2`:
+  do the following in your test (for instance inside `setup`):
 
       Mox.stub_with(MyApp.CalcMock, MyApp.TestCalculator)
 
