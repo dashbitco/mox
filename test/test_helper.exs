@@ -1,8 +1,10 @@
 excludes =
-  if Version.match?(System.version(), ">= 1.8.0") do
-    []
-  else
-    [:requires_caller_tracking]
-  end
+  [
+    {"< 1.7.0", [:requires_code_fetch_docs]},
+    {"< 1.8.0", [:requires_caller_tracking]}
+  ]
+  |> Enum.flat_map(fn {version, tags} ->
+    if Version.match?(System.version(), version), do: tags, else: []
+  end)
 
 ExUnit.start(exclude: excludes)
