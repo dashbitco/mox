@@ -4,20 +4,6 @@ defmodule MoxTest do
   import Mox
   doctest Mox
 
-  defmodule Calculator do
-    @callback add(integer(), integer()) :: integer()
-    @callback mult(integer(), integer()) :: integer()
-  end
-
-  defmodule ScientificCalculator do
-    @callback exponent(integer(), integer()) :: integer()
-    @callback sin(integer()) :: float()
-    @optional_callbacks [sin: 1]
-  end
-
-  defmock(CalcMock, for: Calculator)
-  defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
-
   def in_all_modes(callback) do
     set_mox_global()
     callback.()
@@ -111,6 +97,21 @@ defmodule MoxTest do
           skip_optional_callbacks: [exponent: 2]
         )
       end
+    end
+
+    @tag :requires_code_fetch_docs
+    test "uses false for when moduledoc is not given" do
+      assert {:docs_v1, _, :elixir, "text/markdown", :hidden, _, _} =
+               Code.fetch_docs(MyMockWithoutModuledoc)
+    end
+
+    @tag :requires_code_fetch_docs
+    test "passes value to @moduledoc if moduledoc is given" do
+      assert {:docs_v1, _, :elixir, "text/markdown", :hidden, _, _} =
+               Code.fetch_docs(MyMockWithFalseModuledoc)
+
+      assert {:docs_v1, _, :elixir, "text/markdown", %{"en" => "hello world"}, _, _} =
+               Code.fetch_docs(MyMockWithStringModuledoc)
     end
   end
 
