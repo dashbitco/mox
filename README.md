@@ -31,6 +31,13 @@ end
 
 Mox should be automatically started unless the `:applications` key is set inside `def application` in your `mix.exs`. In such cases, you need to [remove the `:applications` key in favor of `:extra_applications`](https://elixir-lang.org/blog/2017/01/05/elixir-v1-4-0-released/#application-inference) or call `Application.ensure_all_started(:mox)` in your `test/test_helper.exs`.
 
+## Enforcing consistency with behaviour typespecs
+
+[Hammox](https://github.com/msz/hammox) is an enhanced version of Mox which
+automatically makes sure that calls to mocks match the typespecs defined in
+the behaviour. If you find this useful, see the [project
+homepage](https://github.com/msz/hammox).
+
 ## License
 
 Copyright 2017 Plataformatec
