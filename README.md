@@ -33,10 +33,7 @@ Mox should be automatically started unless the `:applications` key is set inside
 
 ## Enforcing consistency with behaviour typespecs
 
-[Hammox](https://github.com/msz/hammox) is an enhanced version of Mox which
-automatically makes sure that calls to mocks match the typespecs defined in
-the behaviour. If you find this useful, see the [project
-homepage](https://github.com/msz/hammox).
+[Hammox](https://github.com/msz/hammox) is an enhanced version of Mox which automatically makes sure that calls to mocks match the typespecs defined in the behaviour. If you find this useful, see the [project homepage](https://github.com/msz/hammox).
 
 ## License
 
