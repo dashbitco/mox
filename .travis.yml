@@ -9,4 +9,4 @@ matrix:
       otp_release: 22.0
 notifications:
   recipients:
-    - jose.valim@plataformatec.com.br
+    - jose.valim@dashbit.co

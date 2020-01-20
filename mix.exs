@@ -38,7 +38,7 @@ defmodule Mox.MixProject do
     [
       main: "Mox",
       source_ref: "v#{@version}",
-      source_url: "https://github.com/plataformatec/mox"
+      source_url: "https://github.com/dashbitco/mox"
     ]
   end
 
@@ -46,7 +46,7 @@ defmodule Mox.MixProject do
     %{
       licenses: ["Apache-2.0"],
       maintainers: ["José Valim"],
-      links: %{"GitHub" => "https://github.com/plataformatec/mox"}
+      links: %{"GitHub" => "https://github.com/dashbitco/mox"}
     }
   end
 end

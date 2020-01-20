@@ -2,7 +2,7 @@
 
 ## Description
 
-This example is a barebones example of how to use [Mox](https://github.com/plataformatec/mox) and how to configure it during testing.
+This example is a barebones example of how to use [Mox](https://github.com/dashbitco/mox) and how to configure it during testing.
 
 ## How
 
