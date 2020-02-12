@@ -701,7 +701,7 @@ defmodule Mox do
 
         raise UnexpectedCallError,
               "expected #{mfa} to be called #{times(count)} but it has been " <>
-                "called #{times(count + 1)} in process #{format_process()}"
+                "called #{times(count + 1)} in #{format_process()}"
 
       {:ok, fun_to_call} ->
         apply(fun_to_call, args)
