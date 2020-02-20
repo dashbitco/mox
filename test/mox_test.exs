@@ -710,15 +710,17 @@ defmodule MoxTest do
     test "allowances are reclaimed if the owner process dies" do
       parent_pid = self()
 
-      task =
-        Task.async(fn ->
+      {pid, ref} =
+        spawn_monitor(fn ->
           CalcMock
           |> expect(:add, fn _, _ -> :expected end)
           |> stub(:mult, fn _, _ -> :stubbed end)
           |> allow(self(), parent_pid)
         end)
 
-      Task.await(task)
+      receive do
+        {:DOWN, ^ref, _, _, _} -> :ok
+      end
 
       assert_raise Mox.UnexpectedCallError, fn ->
         CalcMock.add(1, 1)
