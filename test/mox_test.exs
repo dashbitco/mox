@@ -710,7 +710,7 @@ defmodule MoxTest do
     test "allowances are reclaimed if the owner process dies" do
       parent_pid = self()
 
-      {pid, ref} =
+      {_pid, ref} =
         spawn_monitor(fn ->
           CalcMock
           |> expect(:add, fn _, _ -> :expected end)
