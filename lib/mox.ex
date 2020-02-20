@@ -327,7 +327,7 @@ defmodule Mox do
 
   defp validate_behaviour!(behaviour) do
     cond do
-      not Code.ensure_compiled?(behaviour) ->
+      Code.ensure_compiled(behaviour) != {:module, behaviour} ->
         raise ArgumentError,
               "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
 
@@ -633,8 +633,7 @@ defmodule Mox do
     Mox.Server.verify_on_exit(pid)
 
     ExUnit.Callbacks.on_exit(Mox, fn ->
-      verify_mock_or_all!(pid, :all)
-      Mox.Server.exit(pid)
+      verify_mock_or_all!(pid, :all, :on_exit)
     end)
   end
 
@@ -643,7 +642,7 @@ defmodule Mox do
   have been called.
   """
   def verify! do
-    verify_mock_or_all!(self(), :all)
+    verify_mock_or_all!(self(), :all, :test)
   end
 
   @doc """
@@ -651,11 +650,11 @@ defmodule Mox do
   """
   def verify!(mock) do
     validate_mock!(mock)
-    verify_mock_or_all!(self(), mock)
+    verify_mock_or_all!(self(), mock, :test)
   end
 
-  defp verify_mock_or_all!(pid, mock) do
-    pending = Mox.Server.verify(pid, mock)
+  defp verify_mock_or_all!(pid, mock, test_or_on_exit) do
+    pending = Mox.Server.verify(pid, mock, test_or_on_exit)
 
     messages =
       for {{module, name, arity}, total, pending} <- pending do
@@ -674,7 +673,7 @@ defmodule Mox do
 
   defp validate_mock!(mock) do
     cond do
-      not Code.ensure_compiled?(mock) ->
+      Code.ensure_compiled(mock) != {:module, mock} ->
         raise ArgumentError, "module #{inspect(mock)} is not available"
 
       not function_exported?(mock, :__mock_for__, 0) ->
