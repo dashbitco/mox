@@ -18,8 +18,8 @@ defmodule Mox.Server do
     GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, caller_pids, key}, @timeout)
   end
 
-  def verify(owner_pid, for) do
-    GenServer.call(__MODULE__, {:verify, owner_pid, for}, @timeout)
+  def verify(owner_pid, for, test_or_on_exit) do
+    GenServer.call(__MODULE__, {:verify, owner_pid, for, test_or_on_exit}, @timeout)
   end
 
   def verify_on_exit(pid) do
@@ -28,10 +28,6 @@ defmodule Mox.Server do
 
   def allow(mock, owner_pid, pid) do
     GenServer.call(__MODULE__, {:allow, mock, owner_pid, pid}, @timeout)
-  end
-
-  def exit(pid) do
-    GenServer.cast(__MODULE__, {:exit, pid})
   end
 
   def set_mode(owner_pid, mode) do
@@ -131,7 +127,7 @@ defmodule Mox.Server do
     end
   end
 
-  def handle_call({:verify, owner_pid, mock}, _from, state) do
+  def handle_call({:verify, owner_pid, mock, test_or_on_exit}, _from, state) do
     expectations = state.expectations[owner_pid] || %{}
 
     pending =
@@ -140,11 +136,18 @@ defmodule Mox.Server do
         {key, count, length(calls)}
       end
 
+    state =
+      if test_or_on_exit == :on_exit do
+        down(state, owner_pid)
+      else
+        state
+      end
+
     {:reply, pending, state}
   end
 
   def handle_call({:verify_on_exit, pid}, _from, state) do
-    state = maybe_add_and_monitor_pid(state, pid, :EXIT, fn {_, deps} -> {:EXIT, deps} end)
+    state = maybe_add_and_monitor_pid(state, pid, :on_exit, fn {_, deps} -> {:on_exit, deps} end)
     {:reply, :ok, state}
   end
 
@@ -184,10 +187,6 @@ defmodule Mox.Server do
     {:reply, :ok, %{state | mode: :private, global_owner_pid: nil}}
   end
 
-  def handle_cast({:exit, pid}, state) do
-    {:noreply, down(state, pid)}
-  end
-
   def handle_info({:DOWN, _, _, pid, _}, state) do
     state =
       case state.global_owner_pid do
@@ -221,17 +220,13 @@ defmodule Mox.Server do
   end
 
   defp maybe_add_and_monitor_pid(state, pid) do
-    maybe_add_and_monitor_pid(state, pid, :DOWN, nil)
+    maybe_add_and_monitor_pid(state, pid, :DOWN, & &1)
   end
 
   defp maybe_add_and_monitor_pid(state, pid, on, fun) do
     case state.deps do
       %{^pid => entry} ->
-        if fun do
-          put_in(state.deps[pid], fun.(entry))
-        else
-          state
-        end
+        put_in(state.deps[pid], fun.(entry))
 
       _ ->
         Process.monitor(pid)
