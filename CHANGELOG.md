@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.2 (2020-02-20)
+
+### Enhancements
+
+  * Warn if global is used with async mode
+  * Fix compilation warnings
+
 ## v0.5.1 (2019-05-24)
 
 ### Enhancements
