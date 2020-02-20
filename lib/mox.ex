@@ -152,13 +152,10 @@ defmodule Mox do
   ### Global mode
 
   Mox supports global mode, where any process can consume mocks and stubs
-  defined in your tests. To manually switch to global mode use:
+  defined in your tests. This is enabled automatically based if the test
+  is async or not:
 
-      set_mox_global()
-
-  which can be done as a setup callback:
-
-      setup :set_mox_global
+      setup :set_mox_from_context
       setup :verify_on_exit!
 
       test "invokes add and mult from a task" do
@@ -172,15 +169,6 @@ defmodule Mox do
         end)
         |> Task.await
       end
-
-  The global mode must always be explicitly set per test. By default
-  mocks run on `private` mode.
-
-  You can also automatically choose global or private mode depending on
-  if your tests run in async mode or not. In such case Mox will use
-  private mode when `async: true`, global mode otherwise:
-
-      setup :set_mox_from_context
 
   ### Blocking on expectations
 
@@ -235,9 +223,12 @@ defmodule Mox do
   end
 
   @doc """
-  Sets the Mox to private mode, where mocks can be set and
-  consumed by the same process unless other processes are
-  explicitly allowed.
+  Sets the Mox to private mode.
+
+  In private mode, mocks can be set and consumed by the same
+  process unless other processes are explicitly allowed.
+
+  ## Examples
 
       setup :set_mox_private
 
@@ -245,13 +236,16 @@ defmodule Mox do
   def set_mox_private(_context \\ %{}), do: Mox.Server.set_mode(self(), :private)
 
   @doc """
-  Sets the Mox to global mode, where mocks can be consumed
-  by any process.
+  Sets the Mox to global mode.
 
-      setup :set_mox_global
+  In global mode, mocks can be consumed by any process.
 
   An ExUnit case where tests use Mox in global mode cannot be
   `async: true`.
+
+  ## Examples
+
+      setup :set_mox_global
   """
   def set_mox_global(context \\ %{}) do
     if Map.get(context, :async) do
@@ -263,8 +257,12 @@ defmodule Mox do
   end
 
   @doc """
-  Chooses the Mox mode based on context. When `async: true` is used
-  the mode is `:private`, otherwise `:global` is chosen.
+  Chooses the Mox mode based on context.
+
+  When `async: true` is used, `set_mox_private/1` is called,
+  otherwise `set_mox_global/1` is used.
+
+  ## Examples
 
       setup :set_mox_from_context
 
