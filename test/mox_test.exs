@@ -113,6 +113,18 @@ defmodule MoxTest do
       assert {:docs_v1, _, :elixir, "text/markdown", %{"en" => "hello world"}, _, _} =
                Code.fetch_docs(MyMockWithStringModuledoc)
     end
+
+    @tag :one
+    test "has behaviours of what it mocks" do
+      defmock(OneBehaviourMock, for: Calculator)
+      assert behaviour = OneBehaviourMock.__info__(:attributes)[:behaviour]
+      assert Calculator in behaviour
+
+      defmock(MultiBehaviourMock, for: [Calculator, ScientificCalculator])
+      assert behaviour = MultiBehaviourMock.__info__(:attributes)[:behaviour]
+      assert Calculator in behaviour
+      assert ScientificCalculator in behaviour
+    end
   end
 
   describe "expect/4" do
