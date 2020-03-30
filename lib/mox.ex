@@ -351,6 +351,7 @@ defmodule Mox do
       validate_behaviour!(behaviour)
 
       quote do
+        @behaviour unquote(behaviour)
         unquote(behaviour).module_info(:module)
       end
     end

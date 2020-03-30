@@ -114,16 +114,15 @@ defmodule MoxTest do
                Code.fetch_docs(MyMockWithStringModuledoc)
     end
 
-    @tag :one
     test "has behaviours of what it mocks" do
       defmock(OneBehaviourMock, for: Calculator)
-      assert behaviour = OneBehaviourMock.__info__(:attributes)[:behaviour]
-      assert Calculator in behaviour
+      assert one_behaviour = OneBehaviourMock.__info__(:attributes)
+      assert {:behaviour, [Calculator]} in one_behaviour
 
       defmock(MultiBehaviourMock, for: [Calculator, ScientificCalculator])
-      assert behaviour = MultiBehaviourMock.__info__(:attributes)[:behaviour]
-      assert Calculator in behaviour
-      assert ScientificCalculator in behaviour
+      assert two_behaviour = MultiBehaviourMock.__info__(:attributes)
+      assert {:behaviour, [Calculator]} in two_behaviour
+      assert {:behaviour, [ScientificCalculator]} in two_behaviour
     end
   end
 
