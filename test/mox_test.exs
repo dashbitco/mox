@@ -99,6 +99,42 @@ defmodule MoxTest do
       end
     end
 
+    test "can clone structs" do
+      assert %{ans: 0} = %MyStructMock1{}
+      assert %{ans: 0} = %MyStructMock2{}
+    end
+
+    test "cloned struct must be from a valid module" do
+      expected_error = "the :struct option must be a module"
+
+      assert_raise ArgumentError, expected_error, fn ->
+        defmock(MyMock, for: Calculator, struct: "foo")
+      end
+
+      assert_raise ArgumentError, expected_error, fn ->
+        defmock(MyMock, for: Calculator, struct: NotAModule)
+      end
+    end
+
+    test "cloned struct must have an associated struct" do
+      Code.ensure_loaded(CalculatorNoStruct)
+      expected_error = "the :struct module must define a struct."
+
+      assert_raise ArgumentError, expected_error, fn ->
+        defmock(MyMock, for: Calculator, struct: CalculatorNoStruct)
+      end
+    end
+
+    test "struct source module must implement all behaviours" do
+      Code.ensure_loaded(CalculatorStructOneBehaviour)
+      expected_error = "the :struct module must implement all behaviours: Elixir.ScientificCalculator was not implemented."
+
+      assert_raise ArgumentError, expected_error, fn ->
+        defmock(MyMock, for: [Calculator, ScientificCalculator],
+          struct: CalculatorStructOneBehaviour)
+      end
+    end
+
     @tag :requires_code_fetch_docs
     test "uses false for when moduledoc is not given" do
       assert {:docs_v1, _, :elixir, "text/markdown", :hidden, _, _} =

@@ -302,6 +302,14 @@ defmodule Mox do
       Mox.defmock(MyMock, for: MyBehaviour, moduledoc: false)
       Mox.defmock(MyMock, for: MyBehaviour, moduledoc: "My mock module.")
 
+  ## Cloning structs
+
+  If you would like to clone the struct from an implementation into your mock,
+  you may do so with the `:struct` option.  There may be only one such option,
+  and the corresponding module MUST implement all of the behaviours being
+  mocked.
+
+      Mox.defmock(MyMock, for: MyStructModule, struct: SomeImplementation)
   """
   def defmock(name, options) when is_atom(name) and is_list(options) do
     behaviours =
@@ -315,10 +323,11 @@ defmodule Mox do
 
     doc_header = generate_doc_header(moduledoc)
     compile_header = generate_compile_time_dependency(behaviours)
+    cloned_struct = generate_struct(behaviours, options)
     callbacks_to_skip = validate_skip_optional_callbacks!(behaviours, skip_optional_callbacks)
     mock_funs = generate_mock_funs(behaviours, callbacks_to_skip)
 
-    define_mock_module(name, behaviours, doc_header ++ compile_header ++ mock_funs)
+    define_mock_module(name, behaviours, doc_header ++ compile_header ++ cloned_struct ++ mock_funs)
 
     name
   end
@@ -354,6 +363,47 @@ defmodule Mox do
         unquote(behaviour).module_info(:module)
       end
     end
+  end
+
+  defp generate_struct(behaviours, options) do
+    struct_source = options[:struct]
+    case struct_source do
+      nil -> []
+      s when not(is_atom(s)) ->
+        raise ArgumentError, "the :struct option must be a module"
+      _ ->
+       clone_struct(behaviours, struct_source)
+    end
+  end
+
+  defp clone_struct(behaviours, struct_source) do
+    unless function_exported?(struct_source, :module_info, 0) do
+      raise ArgumentError, "the :struct option must be a module"
+    end
+    source_behaviours = struct_source.module_info()
+    |> Keyword.get(:attributes)
+    |> Enum.flat_map(fn
+      {:behaviour, mod} -> mod
+      _ -> []
+    end)
+    unless Enum.all?(behaviours, &(&1 in source_behaviours)) do
+      missing_behaviours = Enum.join(behaviours -- source_behaviours, " ")
+      raise ArgumentError,
+        "the :struct module must implement all behaviours: #{missing_behaviours}" <>
+        " was not implemented."
+    end
+    unless function_exported?(struct_source, :__struct__, 0) do
+      raise ArgumentError, "the :struct module must define a struct."
+    end
+
+    struct_data = struct_source.__struct__
+    |> Map.from_struct
+    |> Enum.to_list
+    |> Macro.escape
+
+    [quote do
+      defstruct unquote(struct_data)
+    end]
   end
 
   defp generate_mock_funs(behaviours, callbacks_to_skip) do
