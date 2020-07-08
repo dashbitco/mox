@@ -583,6 +583,16 @@ defmodule MoxTest do
       def exponent(x, y), do: :math.pow(x, y)
     end
 
+    defmodule SciCalcFullImplementation do
+      @behaviour Calculator
+      def add(x, y), do: x + y
+      def mult(x, y), do: x * y
+
+      @behaviour ScientificCalculator
+      def exponent(x, y), do: :math.pow(x, y)
+      def sin(x), do: :math.sin(x)
+    end
+
     test "can override stubs" do
       in_all_modes(fn ->
         stub_with(CalcMock, CalcImplementation)
@@ -600,6 +610,29 @@ defmodule MoxTest do
         assert CalcMock.add(3, 4) == 7
         assert CalcMock.mult(2, 2) == 4
         assert CalcMock.mult(3, 4) == 12
+      end)
+    end
+
+    test "stubs functions which are optional callbacks" do
+      in_all_modes(fn ->
+        stub_with(SciCalcMock, SciCalcFullImplementation)
+        assert SciCalcMock.add(1, 2) == 3
+        assert SciCalcMock.mult(3, 4) == 12
+        assert SciCalcMock.exponent(2, 10) == 1024
+        assert SciCalcMock.sin(0) == 0.0
+      end)
+    end
+
+    test "skips undefined functions which are optional callbacks" do
+      in_all_modes(fn ->
+        stub_with(SciCalcMockWithoutOptional, SciCalcImplementation)
+        assert SciCalcMockWithoutOptional.add(1, 2) == 3
+        assert SciCalcMockWithoutOptional.mult(3, 4) == 12
+        assert SciCalcMockWithoutOptional.exponent(2, 10) == 1024
+
+        assert_raise UndefinedFunctionError, fn ->
+          SciCalcMockWithoutOptional.sin(1)
+        end
       end)
     end
 

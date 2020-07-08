@@ -524,7 +524,9 @@ defmodule Mox do
 
     for behaviour <- behaviours,
         {fun, arity} <- behaviour.behaviour_info(:callbacks) do
-      stub(mock, fun, :erlang.make_fun(module, fun, arity))
+      if function_exported?(mock, fun, arity) do
+        stub(mock, fun, :erlang.make_fun(module, fun, arity))
+      end
     end
 
     mock
