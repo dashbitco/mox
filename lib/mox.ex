@@ -438,14 +438,28 @@ defmodule Mox do
 
       expect(MyMock, :add, 0, fn x, y -> :ok end)
 
-  `expect/4` can also be invoked multiple times for the same
-  name/arity, allowing you to give different behaviours on each
-  invocation:
+  `expect/4` can also be invoked multiple times for the same name/arity,
+  allowing you to give different behaviours on each invocation. For instance,
+  you could test that your code will try an API call three times before giving
+  up:
 
-      MyMock
-      |> expect(:add, fn x, y -> x + y end)
-      |> expect(:add, fn x, y -> x * y end)
+      MockWeatherAPI
+      |> expect(:get_temp, 2, fn _loc -> {:error, :unreachable} end)
+      |> expect(:get_temp, 1, fn _loc -> {:ok, 30} end)
 
+      log = capture_log(fn ->
+        assert Weather.current_temp(location)
+          == "It's currently 30 degrees"
+      end)
+
+      assert log =~ "attempt 1 failed"
+      assert log =~ "attempt 2 failed"
+      assert log =~ "attempt 3 succeeded"
+
+      MockWeatherAPI
+      |> expect(:get_temp, 3, fn _loc -> {:error, :unreachable} end)
+
+      assert Weather.current_temp(location) == "Current temperature is unavailable"
   """
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 0 and is_function(code) do
