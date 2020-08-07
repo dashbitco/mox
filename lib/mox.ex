@@ -18,47 +18,54 @@ defmodule Mox do
 
   ## Example
 
-  As an example, imagine that your library defines a calculator behaviour:
+  As an example, imagine that your project defines a `WeatherAPI` behaviour:
 
-      defmodule MyApp.Calculator do
-        @callback add(integer(), integer()) :: integer()
-        @callback mult(integer(), integer()) :: integer()
+      defmodule MyApp.WeatherAPI do
+        @callback temp(MyApp.LatLong.t()) :: integer()
+        @callback humidity(MyApp.LatLong.t()) :: integer()
       end
 
-  If you want to mock the calculator behaviour during tests, the first step
+  If you want to mock the WeatherAPI behaviour during tests, the first step
   is to define the mock with `defmock/2`, usually in your `test_helper.exs`:
 
-      Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
+      Mox.defmock(MyApp.MockWeatherAPI, for: MyApp.WeatherAPI)
 
   Now in your tests, you can define expectations with `expect/4` and verify
   them via `verify_on_exit!/1`:
 
-      use ExUnit.Case, async: true
+      defmodule MyApp.HumanizedWeatherTest do
+        use ExUnit.Case, async: true
 
-      import Mox
+        import Mox
 
-      # Make sure mocks are verified when the test exits
-      setup :verify_on_exit!
+        # Make sure mocks are verified when the test exits
+        setup :verify_on_exit!
 
-      test "invokes add and mult" do
-        MyApp.CalcMock
-        |> expect(:add, fn x, y -> x + y end)
-        |> expect(:mult, fn x, y -> x * y end)
+        test "gets and formats temperature and humidity" do
+          MyApp.MockWeatherAPI
+          |> expect(:temp, fn {_lat, _long} ->
+            {:ok, 30}
+          end)
+          |> expect(:humidity, fn {_lat, _long} -> {:ok, 60} end)
 
-        assert MyApp.CalcMock.add(2, 3) == 5
-        assert MyApp.CalcMock.mult(2, 3) == 6
+          assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
+            "Current temperature is 30 degrees"
+          assert MyApp.HumanizedWeather.humdity({50.06, 19.94}) ==
+            "Current humidity is 60%"
+        end
       end
 
-  In practice, you will have to pass the mock to the system under the test.
+  In practice, you will have to ensure that during tests, the code you're
+  testing uses the mock rather than the actual implementation.
   If the system under test relies on application configuration, you should
-  also set it before the tests starts to keep the async property. Usually
-  in your config files:
+  set it before the test suite starts so that you can use `async: true`.
+  You can do this in your config files:
 
-      config :my_app, :calculator, MyApp.CalcMock
+      config :my_app, :weather_api, MyApp.MockWeatherAPI
 
   Or in your `test_helper.exs`:
 
-      Application.put_env(:my_app, :calculator, MyApp.CalcMock)
+      Application.put_env(:my_app, :weather_api, MyApp.MockWeatherAPI)
 
   All expectations are defined based on the current process. This
   means multiple tests using the same mock can still run concurrently
@@ -66,29 +73,28 @@ defmodule Mox do
   section.
 
   Especially if you put the mock into the config/application environment you
-  might want the implementation to fall back to the original implementation
-  when no expectations are defined. `stub_with/2` is just what you need! Given
-  that `MyApp.TestCalculator` is the implementation you are mocking you can
-  do the following in your test (for instance inside `setup`):
+  might want the implementation to fall back to a stub (or actual) implementation
+  when no expectations are defined. `stub_with/2` is just what you need! You
+  can use it in your test (or in `setup`) as follows:
 
-      Mox.stub_with(MyApp.CalcMock, MyApp.TestCalculator)
+      Mox.stub_with(MyApp.MockWeatherAPI, MyApp.StubWeatherAPI)
 
   Now, if no expectations are defined it will call the implementation in
-  `MyApp.TestCalculator`.
+  `MyApp.StubWeatherAPI`.
 
   ## Multiple behaviours
 
   Mox supports defining mocks for multiple behaviours.
 
-  Suppose your library also defines a scientific calculator behaviour:
+  Suppose your library also defines a behaviour for getting past weather:
 
-      defmodule MyApp.ScientificCalculator do
-        @callback exponent(integer(), integer()) :: integer()
+      defmodule MyApp.PastWeatherAPI do
+        @callback past_temp(MyApp.LatLong.t(), DateTime.t()) :: integer()
       end
 
-  You can mock both the calculator and scientific calculator behaviour:
+  You can mock both the weather and past weather behaviour:
 
-      Mox.defmock(MyApp.SciCalcMock, for: [MyApp.Calculator, MyApp.ScientificCalculator])
+      Mox.defmock(MyApp.MockWeatherAPI, for: [MyApp.WeatherAPI, MyApp.PastWeatherAPI])
 
   ## Compile-time requirements
 
@@ -97,7 +103,7 @@ defmodule Mox do
   defining the mock in your `test_helper.exs`, you should instead define
   it under `test/support/mocks.ex`:
 
-      Mox.defmock(MyApp.CalcMock, for: MyApp.Calculator)
+      Mox.defmock(MyApp.MockWeatherAPI, for: MyApp.WeatherAPI)
 
   Then you need to make sure that files in `test/support` get compiled
   with the rest of the project. Edit your `mix.exs` file to add the
@@ -130,16 +136,19 @@ defmodule Mox do
   defined in the parent process while still being safe for async tests.
 
       test "invokes add and mult from a task" do
-        MyApp.CalcMock
-        |> expect(:add, fn x, y -> x + y end)
-        |> expect(:mult, fn x, y -> x * y end)
+        MyApp.MockWeatherAPI
+        |> expect(:temp, fn _loc -> {:ok, 30} end)
+        |> expect(:humidity, fn _loc -> {:ok, 60} end)
 
         parent_pid = self()
 
         Task.async(fn ->
-          MyApp.CalcMock |> allow(parent_pid, self())
-          assert MyApp.CalcMock.add(2, 3) == 5
-          assert MyApp.CalcMock.mult(2, 3) == 6
+          MyApp.MockWeatherAPI |> allow(parent_pid, self())
+
+          assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
+            "Current temperature is 30 degrees"
+          assert MyApp.HumanizedWeather.humdity({50.06, 19.94}) ==
+            "Current humidity is 60%"
         end)
         |> Task.await
       end
@@ -152,20 +161,22 @@ defmodule Mox do
   ### Global mode
 
   Mox supports global mode, where any process can consume mocks and stubs
-  defined in your tests. This is enabled automatically based if the test
-  is async or not:
+  defined in your tests. `set_mox_from_context/0` automatically calls
+  `set_mox_global/1` if the test context includes `async: true`.
 
       setup :set_mox_from_context
       setup :verify_on_exit!
 
       test "invokes add and mult from a task" do
-        MyApp.CalcMock
-        |> expect(:add, fn x, y -> x + y end)
-        |> expect(:mult, fn x, y -> x * y end)
+        MyApp.MockWeatherAPI
+        |> expect(:temp, fn _loc -> {:ok, 30} end)
+        |> expect(:humidity, fn _loc -> {:ok, 60} end)
 
         Task.async(fn ->
-          assert MyApp.CalcMock.add(2, 3) == 5
-          assert MyApp.CalcMock.mult(2, 3) == 6
+          assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
+            "Current temperature is 30 degrees"
+          assert MyApp.HumanizedWeather.humdity({50.06, 19.94}) ==
+            "Current humidity is 60%"
         end)
         |> Task.await
       end
@@ -178,9 +189,9 @@ defmodule Mox do
   Imagine this:
 
       test "calling a mock from a different process" do
-        expect(MyApp.CalcMock, :add, fn x, y -> x + y end)
+        expect(MyApp.MockWeatherAPI, :temp, fn _loc -> {:ok, 30} end)
 
-        spawn(fn -> MyApp.CalcMock.add(4, 2) end)
+        spawn(fn -> MyApp.HumanizedWeather.temp({50.06, 19.94}) end)
 
         verify!()
       end
@@ -198,14 +209,14 @@ defmodule Mox do
         parent = self()
         ref = make_ref()
 
-        expect(MyApp.CalcMock, :add, fn x, y ->
-          send(parent, {ref, :add})
-          x + y
+        expect(MyApp.MockWeatherAPI, :temp, fn _loc ->
+          send(parent, {ref, :temp})
+          {:ok, 30}
         end)
 
-        spawn(fn -> MyApp.CalcMock.add(4, 2) end)
+        spawn(fn -> MyApp.HumanizedWeather.temp({50.06, 19.94}) end)
 
-        assert_receive {^ref, :add}
+        assert_receive {^ref, :temp}
 
         verify!()
       end
@@ -281,10 +292,10 @@ defmodule Mox do
 
   ## Skipping optional callbacks
 
-  By default, functions are created for all callbacks, including all optional
-  callbacks. But if for some reason you want to skip optional callbacks, you can
-  provide the list of callback names to skip (along with their arities) as
-  `:skip_optional_callbacks`:
+  By default, functions are created for all the behaviour's callbacks,
+  including optional ones. But if for some reason you want to skip one or more
+  of its `@optional_callbacks`, you can provide the list of callback names to
+  skip (along with their arities) as `:skip_optional_callbacks`:
 
       Mox.defmock(MyMock, for: MyBehaviour, skip_optional_callbacks: [on_success: 2])
 
@@ -426,17 +437,17 @@ defmodule Mox do
 
   ## Examples
 
-  To expect `MyMock.add/2` to be called once:
+  To expect `MockWeatherAPI.get_temp/1` to be called once:
 
-      expect(MyMock, :add, fn x, y -> x + y end)
+      expect(MockWeatherAPI, :get_temp, fn _ -> {:ok, 30} end)
 
-  To expect `MyMock.add/2` to be called five times:
+  To expect `MockWeatherAPI.get_temp/1` to be called five times:
 
-      expect(MyMock, :add, 5, fn x, y -> x + y end)
+      expect(MockWeatherAPI, :get_temp, 5, fn _ -> {:ok, 30} end)
 
-  To expect `MyMock.add/2` to not be called:
+  To expect `MockWeatherAPI.get_temp/1` not to be called:
 
-      expect(MyMock, :add, 0, fn x, y -> :ok end)
+      expect(MockWeatherAPI, :get_temp, 0, fn _ -> {:ok, 30} end)
 
   `expect/4` can also be invoked multiple times for the same name/arity,
   allowing you to give different behaviours on each invocation. For instance,
@@ -480,9 +491,9 @@ defmodule Mox do
 
   ## Examples
 
-  To allow `MyMock.add/2` to be called any number of times:
+  To allow `MockWeatherAPI.get_temp/1` to be called any number of times:
 
-      stub(MyMock, :add, fn x, y -> x + y end)
+      stub(MockWeatherAPI, :get_temp, fn _loc -> {:ok, 30} end)
 
   `stub/3` will overwrite any previous calls to `stub/3`.
   """
@@ -497,24 +508,24 @@ defmodule Mox do
 
   ## Examples
 
-      defmodule Calculator do
-        @callback add(integer(), integer()) :: integer()
-        @callback mult(integer(), integer()) :: integer()
+      defmodule MyApp.WeatherAPI do
+        @callback temp(MyApp.LatLong.t()) :: integer()
+        @callback humidity(MyApp.LatLong.t()) :: integer()
       end
 
-      defmodule TestCalculator do
-        @behaviour Calculator
-        def add(a, b), do: a + b
-        def mult(a, b), do: a * b
+      defmodule MyApp.StubWeatherAPI do
+        @behaviour WeatherAPI
+        def temp(_loc), do: {:ok, 30}
+        def humidity(_loc), do: {:ok, 60}
       end
 
-      defmock(CalcMock, for: Calculator)
-      stub_with(CalcMock, TestCalculator)
+      defmock(MyApp.MockWeatherAPI, for: MyApp.WeatherAPI)
+      stub_with(MyApp.MockWeatherAPI, MyApp.StubWeatherAPI)
 
-  This is the same as calling `stub/3` for each behaviour in `CalcMock`:
+  This is the same as calling `stub/3` for each behaviour in `MyApp.MockWeatherAPI`:
 
-      stub(CalcMock, :add, &TestCalculator.add/2)
-      stub(CalcMock, :mult, &TestCalculator.mult/2)
+      stub(MyApp.MockWeatherAPI, :temp, &MyApp.StubWeatherAPI.temp/1)
+      stub(MyApp.MockWeatherAPI, :humidity, &MyApp.StubWeatherAPI.humidity/1)
 
   """
   def stub_with(mock, module) when is_atom(mock) and is_atom(module) do
