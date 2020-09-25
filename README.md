@@ -24,7 +24,7 @@ Just add `mox` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:mox, "~> 0.5", only: :test}
+    {:mox, "~> 1.0", only: :test}
   ]
 end
 ```
