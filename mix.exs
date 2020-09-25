@@ -1,7 +1,7 @@
 defmodule Mox.MixProject do
   use Mix.Project
 
-  @version "0.5.2"
+  @version "1.0.0"
 
   def project do
     [

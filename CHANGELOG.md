@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.0 (2020-09-25)
+
+### Enhancements
+
+  * Add `@behaviour` attribute to Mox modules
+
 ## v0.5.2 (2020-02-20)
 
 ### Enhancements
