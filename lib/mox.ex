@@ -162,7 +162,10 @@ defmodule Mox do
 
   Mox supports global mode, where any process can consume mocks and stubs
   defined in your tests. `set_mox_from_context/0` automatically calls
-  `set_mox_global/1` if the test context includes `async: true`.
+  `set_mox_global/1` but only if the test context **doesn't** include
+  `async: true`.
+
+  By default the mode is `:private`.
 
       setup :set_mox_from_context
       setup :verify_on_exit!
