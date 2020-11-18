@@ -43,14 +43,15 @@ defmodule Mox do
 
         test "gets and formats temperature and humidity" do
           MyApp.MockWeatherAPI
-          |> expect(:temp, fn {_lat, _long} -> 30 end)
-          |> expect(:humidity, fn {_lat, _long} -> 60 end)
+          |> expect(:temp, fn {_lat, _long} ->
+            {:ok, 30}
+          end)
+          |> expect(:humidity, fn {_lat, _long} -> {:ok, 60} end)
 
           assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
             "Current temperature is 30 degrees"
-
-          assert MyApp.HumanizedWeather.humidity({50.06, 19.94}) ==
-            "Current humidity is 60 %"
+          assert MyApp.HumanizedWeather.humdity({50.06, 19.94}) ==
+            "Current humidity is 60%"
         end
       end
 
