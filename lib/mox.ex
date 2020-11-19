@@ -21,8 +21,8 @@ defmodule Mox do
   As an example, imagine that your project defines a `WeatherAPI` behaviour:
 
       defmodule MyApp.WeatherAPI do
-        @callback temp(MyApp.LatLong.t()) :: integer()
-        @callback humidity(MyApp.LatLong.t()) :: integer()
+        @callback temp(MyApp.LatLong.t()) :: {:ok, integer()}
+        @callback humidity(MyApp.LatLong.t()) :: {:ok, integer()}
       end
 
   If you want to mock the WeatherAPI behaviour during tests, the first step
@@ -43,14 +43,13 @@ defmodule Mox do
 
         test "gets and formats temperature and humidity" do
           MyApp.MockWeatherAPI
-          |> expect(:temp, fn {_lat, _long} -> 30 end)
-          |> expect(:humidity, fn {_lat, _long} -> 60 end)
+          |> expect(:temp, fn {_lat, _long} -> {:ok, 30} end)
+          |> expect(:humidity, fn {_lat, _long} -> {:ok, 60} end)
 
           assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
             "Current temperature is 30 degrees"
-
           assert MyApp.HumanizedWeather.humidity({50.06, 19.94}) ==
-            "Current humidity is 60 %"
+            "Current humidity is 60%"
         end
       end
 
@@ -88,7 +87,7 @@ defmodule Mox do
   Suppose your library also defines a behaviour for getting past weather:
 
       defmodule MyApp.PastWeatherAPI do
-        @callback past_temp(MyApp.LatLong.t(), DateTime.t()) :: integer()
+        @callback past_temp(MyApp.LatLong.t(), DateTime.t()) :: {:ok, integer()}
       end
 
   You can mock both the weather and past weather behaviour:
@@ -146,7 +145,7 @@ defmodule Mox do
 
           assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
             "Current temperature is 30 degrees"
-          assert MyApp.HumanizedWeather.humdity({50.06, 19.94}) ==
+          assert MyApp.HumanizedWeather.humidity({50.06, 19.94}) ==
             "Current humidity is 60%"
         end)
         |> Task.await
@@ -177,7 +176,7 @@ defmodule Mox do
         Task.async(fn ->
           assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
             "Current temperature is 30 degrees"
-          assert MyApp.HumanizedWeather.humdity({50.06, 19.94}) ==
+          assert MyApp.HumanizedWeather.humidity({50.06, 19.94}) ==
             "Current humidity is 60%"
         end)
         |> Task.await
@@ -511,8 +510,8 @@ defmodule Mox do
   ## Examples
 
       defmodule MyApp.WeatherAPI do
-        @callback temp(MyApp.LatLong.t()) :: integer()
-        @callback humidity(MyApp.LatLong.t()) :: integer()
+        @callback temp(MyApp.LatLong.t()) :: {:ok, integer()}
+        @callback humidity(MyApp.LatLong.t()) :: {:ok, integer()}
       end
 
       defmodule MyApp.StubWeatherAPI do
