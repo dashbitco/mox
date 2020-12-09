@@ -1,11 +1,13 @@
 # The directory Mix will write compiled artifacts to.
 /_build/
+/examples/*/_build/
 
 # If you run "mix test --cover", coverage assets end up here.
 /cover/
 
 # The directory Mix downloads your dependencies sources to.
 /deps/
+/examples/*/deps/
 
 # Where 3rd-party dependencies like ExDoc output generated docs.
 /doc/
@@ -21,4 +23,3 @@ erl_crash.dump
 
 # Ignore package tarball (built via "mix hex.build").
 mox-*.tar
-
