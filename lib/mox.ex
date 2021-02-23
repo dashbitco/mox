@@ -523,7 +523,7 @@ defmodule Mox do
       defmock(MyApp.MockWeatherAPI, for: MyApp.WeatherAPI)
       stub_with(MyApp.MockWeatherAPI, MyApp.StubWeatherAPI)
 
-  This is the same as calling `stub/3` for each behaviour in `MyApp.MockWeatherAPI`:
+  This is the same as calling `stub/3` for each callback in `MyApp.MockWeatherAPI`:
 
       stub(MyApp.MockWeatherAPI, :temp, &MyApp.StubWeatherAPI.temp/1)
       stub(MyApp.MockWeatherAPI, :humidity, &MyApp.StubWeatherAPI.humidity/1)
