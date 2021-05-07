@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-18.04
     env:
       MIX_ENV: test
     strategy:
@@ -19,24 +19,32 @@ jobs:
               elixir: 1.5.3
               otp: 19.3.6.13
           - pair:
-              elixir: 1.11.3
-              otp: 23.2.5
+              elixir: 1.11.4
+              otp: 23.3.3
             lint: lint
     steps:
       - uses: actions/checkout@v2
 
-      - uses: erlef/setup-elixir@v1
+      - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.pair.otp}}
           elixir-version: ${{matrix.pair.elixir}}
 
-      - name: Install Dependencies
-        run: mix deps.get --only test
+      - uses: actions/cache@v2
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - run: mix deps.get
 
       - run: mix format --check-formatted
         if: ${{ matrix.lint }}
 
-      - run: mix deps.get && mix deps.unlock --check-unused
+      - run: mix deps.unlock --check-unused
         if: ${{ matrix.lint }}
 
       - run: mix deps.compile
