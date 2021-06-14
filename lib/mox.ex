@@ -18,17 +18,46 @@ defmodule Mox do
 
   ## Example
 
-  As an example, imagine that your project defines a `WeatherAPI` behaviour:
+  Imagine that you have an app that has to display the weather. At first,
+  you use an external API to give you the data given a lat/long pair:
+
+      defmodule MyApp.HumanizedWeather do
+        def display_temp({lat, long}) do
+          {:ok, temp} = MyApp.Weather.temp({lat, long})
+          "Current temperature is #{temp} degrees"
+        end
+
+        def display_humidity({lat, long}) do
+          {:ok, humidity} = MyApp.Weather.humidity({lat, long})
+          "Current humidity is #{humidity}%"
+        end
+      end
+
+  However, you want to test the code above without performing external
+  API calls. How to do so?
+
+  First, it is important to define the `Weather` behaviour that we want
+  to mock. And we will define a proxy functions that will dispatch to
+  the desired implementation:
 
       defmodule MyApp.WeatherAPI do
         @callback temp(MyApp.LatLong.t()) :: {:ok, integer()}
         @callback humidity(MyApp.LatLong.t()) :: {:ok, integer()}
+
+        def temp(lat_long), do: impl().temp(lat_long)
+        def humidity(lat_long), do: impl().humidity(lat_long)
+        defp impl, do: Application.get_env(:my_app, :weather, MyApp.ExternalWeatherAPI)
       end
 
-  If you want to mock the WeatherAPI behaviour during tests, the first step
-  is to define the mock with `defmock/2`, usually in your `test_helper.exs`:
+  By default, we will dispatch to MyApp.ExternalWeatherAPI, which now contains
+  the external API implementation.
 
-      Mox.defmock(MyApp.MockWeatherAPI, for: MyApp.WeatherAPI)
+  If you want to mock the WeatherAPI behaviour during tests, the first step
+  is to define the mock with `defmock/2`, usually in your `test_helper.exs`,
+  and configure your application to use it:
+
+      Mox.defmock(MyApp.MockWeatherAPI, for: MyApp.Weather)
+      Application.put_env(:my_app, :weather, MyApp.MockWeatherAPI)
 
   Now in your tests, you can define expectations with `expect/4` and verify
   them via `verify_on_exit!/1`:
@@ -46,34 +75,23 @@ defmodule Mox do
           |> expect(:temp, fn {_lat, _long} -> {:ok, 30} end)
           |> expect(:humidity, fn {_lat, _long} -> {:ok, 60} end)
 
-          assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
-            "Current temperature is 30 degrees"
-          assert MyApp.HumanizedWeather.humidity({50.06, 19.94}) ==
-            "Current humidity is 60%"
+          assert MyApp.HumanizedWeather.display_temp({50.06, 19.94}) ==
+                   "Current temperature is 30 degrees"
+
+          assert MyApp.HumanizedWeather.display_humidity({50.06, 19.94}) ==
+                   "Current humidity is 60%"
         end
       end
-
-  In practice, you will have to ensure that during tests, the code you're
-  testing uses the mock rather than the actual implementation.
-  If the system under test relies on application configuration, you should
-  set it before the test suite starts so that you can use `async: true`.
-  You can do this in your config files:
-
-      config :my_app, :weather_api, MyApp.MockWeatherAPI
-
-  Or in your `test_helper.exs`:
-
-      Application.put_env(:my_app, :weather_api, MyApp.MockWeatherAPI)
 
   All expectations are defined based on the current process. This
   means multiple tests using the same mock can still run concurrently
   unless the Mox is set to global mode. See the "Multi-process collaboration"
   section.
 
-  Especially if you put the mock into the config/application environment you
-  might want the implementation to fall back to a stub (or actual) implementation
-  when no expectations are defined. `stub_with/2` is just what you need! You
-  can use it in your test (or in `setup`) as follows:
+  One last note, if the mock is used throughout the test suite, you might want
+  the implementation to fall back to a stub (or actual) implementation when no
+  expectations are defined. You can use `stub_with/2` in your `test_helper.exs`
+  as follows:
 
       Mox.stub_with(MyApp.MockWeatherAPI, MyApp.StubWeatherAPI)
 
@@ -86,13 +104,13 @@ defmodule Mox do
 
   Suppose your library also defines a behaviour for getting past weather:
 
-      defmodule MyApp.PastWeatherAPI do
+      defmodule MyApp.PastWeather do
         @callback past_temp(MyApp.LatLong.t(), DateTime.t()) :: {:ok, integer()}
       end
 
   You can mock both the weather and past weather behaviour:
 
-      Mox.defmock(MyApp.MockWeatherAPI, for: [MyApp.WeatherAPI, MyApp.PastWeatherAPI])
+      Mox.defmock(MyApp.MockWeatherAPI, for: [MyApp.Weather, MyApp.PastWeather])
 
   ## Compile-time requirements
 
@@ -143,10 +161,11 @@ defmodule Mox do
         Task.async(fn ->
           MyApp.MockWeatherAPI |> allow(parent_pid, self())
 
-          assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
-            "Current temperature is 30 degrees"
-          assert MyApp.HumanizedWeather.humidity({50.06, 19.94}) ==
-            "Current humidity is 60%"
+          assert MyApp.HumanizedWeather.display_temp({50.06, 19.94}) ==
+                   "Current temperature is 30 degrees"
+
+          assert MyApp.HumanizedWeather.display_humidity({50.06, 19.94}) ==
+                   "Current humidity is 60%"
         end)
         |> Task.await
       end
@@ -174,10 +193,11 @@ defmodule Mox do
         |> expect(:humidity, fn _loc -> {:ok, 60} end)
 
         Task.async(fn ->
-          assert MyApp.HumanizedWeather.temp({50.06, 19.94}) ==
-            "Current temperature is 30 degrees"
-          assert MyApp.HumanizedWeather.humidity({50.06, 19.94}) ==
-            "Current humidity is 60%"
+          assert MyApp.HumanizedWeather.display_temp({50.06, 19.94}) ==
+                    "Current temperature is 30 degrees"
+
+          assert MyApp.HumanizedWeather.display_humidity({50.06, 19.94}) ==
+                    "Current humidity is 60%"
         end)
         |> Task.await
       end
