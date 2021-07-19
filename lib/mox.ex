@@ -3,7 +3,7 @@ defmodule Mox do
   Mox is a library for defining concurrent mocks in Elixir.
 
   The library follows the principles outlined in
-  ["Mocks and explicit contracts"](http://blog.plataformatec.com.br/2015/10/mocks-and-explicit-contracts/),
+  ["Mocks and explicit contracts"](https://dashbit.co/blog/mocks-and-explicit-contracts),
   summarized below:
 
     1. No ad-hoc mocks. You can only create mocks based on behaviours
