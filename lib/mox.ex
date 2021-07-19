@@ -1,5 +1,5 @@
 defmodule Mox do
-  @moduledoc """
+  @moduledoc ~S"""
   Mox is a library for defining concurrent mocks in Elixir.
 
   The library follows the principles outlined in
