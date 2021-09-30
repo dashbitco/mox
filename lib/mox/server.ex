@@ -40,9 +40,37 @@ defmodule Mox.Server do
     {:ok, %{expectations: %{}, allowances: %{}, deps: %{}, mode: :private, global_owner_pid: nil}}
   end
 
+  def handle_call(msg, _from, state) do
+    # The global process may have terminated and we did not receive
+    # the DOWN message yet, so we always check accordingly if it is alive.
+    with %{mode: :global, global_owner_pid: global_owner_pid} <- state,
+         false <- Process.alive?(global_owner_pid) do
+      handle_call(msg, reset_global_mode(state))
+    else
+      _ -> handle_call(msg, state)
+    end
+  end
+
+  def handle_info({:DOWN, _, _, pid, _}, state) do
+    state =
+      case state.global_owner_pid do
+        ^pid -> reset_global_mode(state)
+        _ -> state
+      end
+
+    state =
+      case state.deps do
+        %{^pid => {:DOWN, _}} -> down(state, pid)
+        %{} -> state
+      end
+
+    {:noreply, state}
+  end
+
+  # handle_call
+
   def handle_call(
         {:add_expectation, owner_pid, {mock, _, _} = key, expectation},
-        _from,
         %{mode: :private} = state
       ) do
     if allowance = state.allowances[owner_pid][mock] do
@@ -61,7 +89,6 @@ defmodule Mox.Server do
 
   def handle_call(
         {:add_expectation, owner_pid, {_mock, _, _} = key, expectation},
-        _from,
         %{mode: :global, global_owner_pid: global_owner_pid} = state
       ) do
     if owner_pid != global_owner_pid do
@@ -78,7 +105,6 @@ defmodule Mox.Server do
 
   def handle_call(
         {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key},
-        _from,
         %{mode: :private} = state
       ) do
     owner_pid =
@@ -108,7 +134,6 @@ defmodule Mox.Server do
 
   def handle_call(
         {:fetch_fun_to_dispatch, _caller_pids, {_mock, _, _} = key},
-        _from,
         %{mode: :global} = state
       ) do
     case state.expectations[state.global_owner_pid][key] do
@@ -127,7 +152,7 @@ defmodule Mox.Server do
     end
   end
 
-  def handle_call({:verify, owner_pid, mock, test_or_on_exit}, _from, state) do
+  def handle_call({:verify, owner_pid, mock, test_or_on_exit}, state) do
     expectations = state.expectations[owner_pid] || %{}
 
     pending =
@@ -146,16 +171,16 @@ defmodule Mox.Server do
     {:reply, pending, state}
   end
 
-  def handle_call({:verify_on_exit, pid}, _from, state) do
+  def handle_call({:verify_on_exit, pid}, state) do
     state = maybe_add_and_monitor_pid(state, pid, :on_exit, fn {_, deps} -> {:on_exit, deps} end)
     {:reply, :ok, state}
   end
 
-  def handle_call({:allow, _, _, _}, _from, %{mode: :global} = state) do
+  def handle_call({:allow, _, _, _}, %{mode: :global} = state) do
     {:reply, {:error, :in_global_mode}, state}
   end
 
-  def handle_call({:allow, mock, owner_pid, pid}, _from, %{mode: :private} = state) do
+  def handle_call({:allow, mock, owner_pid, pid}, %{mode: :private} = state) do
     %{allowances: allowances, expectations: expectations} = state
     owner_pid = state.allowances[owner_pid][mock] || owner_pid
     allowance = allowances[pid][mock]
@@ -178,32 +203,20 @@ defmodule Mox.Server do
     end
   end
 
-  def handle_call({:set_mode, owner_pid, :global}, _from, state) do
+  def handle_call({:set_mode, owner_pid, :global}, state) do
     state = maybe_add_and_monitor_pid(state, owner_pid)
     {:reply, :ok, %{state | mode: :global, global_owner_pid: owner_pid}}
   end
 
-  def handle_call({:set_mode, _owner_pid, :private}, _from, state) do
+  def handle_call({:set_mode, _owner_pid, :private}, state) do
     {:reply, :ok, %{state | mode: :private, global_owner_pid: nil}}
   end
 
-  def handle_info({:DOWN, _, _, pid, _}, state) do
-    state =
-      case state.global_owner_pid do
-        ^pid -> %{state | mode: :private, global_owner_pid: nil}
-        _ -> state
-      end
-
-    state =
-      case state.deps do
-        %{^pid => {:DOWN, _}} -> down(state, pid)
-        %{} -> state
-      end
-
-    {:noreply, state}
-  end
-
   # Helper functions
+
+  defp reset_global_mode(state) do
+    %{state | mode: :private, global_owner_pid: nil}
+  end
 
   defp down(state, pid) do
     {{_, deps}, state} = pop_in(state.deps[pid])
