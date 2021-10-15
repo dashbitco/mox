@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 (2020-10-15)
+
+### Bug fix
+
+  * Fix race condition for when the test process terminates and a new one is started before the DOWN message is processed
+
 ## v1.0.0 (2020-09-25)
 
 ### Enhancements
