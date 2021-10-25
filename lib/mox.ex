@@ -356,11 +356,17 @@ defmodule Mox do
   end
 
   defp validate_module!(behaviour) do
-    Code.ensure_compiled!(behaviour)
-  rescue
-    ArgumentError ->
-      raise ArgumentError,
-              "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
+    cond do
+      function_exported?(Code, :ensure_compiled!, 1) ->
+        Code.ensure_compiled!(behaviour)
+      
+      Code.ensure_compiled(behaviour) == {:module, behaviour} ->
+        :ok
+    
+      true ->
+        raise ArgumentError,
+                "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
+    end
   end
 
   defp validate_behaviour!(behaviour) do
