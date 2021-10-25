@@ -4,6 +4,17 @@ defmodule MoxTest do
   import Mox
   doctest Mox
 
+  @compile {:no_warn_undefined,
+            [
+              MyTrueMock,
+              MyFalseMock,
+              OneBehaviourMock,
+              MyMultiMock,
+              MultiBehaviourMock,
+              MyScientificMock,
+              SciCalcMockWithoutOptional
+            ]}
+
   def in_all_modes(callback) do
     set_mox_global()
     callback.()
@@ -13,7 +24,7 @@ defmodule MoxTest do
 
   describe "defmock/2" do
     test "raises for unknown module" do
-      assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
+      assert_raise ArgumentError, fn ->
         defmock(MyMock, for: Unknown)
       end
     end
