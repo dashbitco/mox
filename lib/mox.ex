@@ -365,7 +365,7 @@ defmodule Mox do
     
       true ->
         raise ArgumentError,
-                "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
+              "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
     end
   end
 
@@ -374,7 +374,7 @@ defmodule Mox do
       behaviour
     else
       raise ArgumentError,
-              "module #{inspect(behaviour)} is not a behaviour, please pass a behaviour to :for"
+            "module #{inspect(behaviour)} is not a behaviour, please pass a behaviour to :for"
     end
   end
 
