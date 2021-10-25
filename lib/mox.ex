@@ -359,10 +359,10 @@ defmodule Mox do
     cond do
       function_exported?(Code, :ensure_compiled!, 1) ->
         Code.ensure_compiled!(behaviour)
-      
+
       Code.ensure_compiled(behaviour) == {:module, behaviour} ->
         behaviour
-    
+
       true ->
         raise ArgumentError,
               "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
