@@ -355,6 +355,7 @@ defmodule Mox do
     name
   end
 
+  @compile {:no_warn_undefined, {Code, :ensure_compiled!, 1}}
   defp validate_module!(behaviour) do
     cond do
       function_exported?(Code, :ensure_compiled!, 1) ->
