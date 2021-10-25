@@ -361,7 +361,7 @@ defmodule Mox do
         Code.ensure_compiled!(behaviour)
       
       Code.ensure_compiled(behaviour) == {:module, behaviour} ->
-        :ok
+        behaviour
     
       true ->
         raise ArgumentError,
