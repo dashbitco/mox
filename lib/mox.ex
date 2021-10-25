@@ -355,18 +355,20 @@ defmodule Mox do
     name
   end
 
-  defp validate_behaviour!(behaviour) do
-    cond do
-      Code.ensure_compiled(behaviour) != {:module, behaviour} ->
-        raise ArgumentError,
+  defp validate_module!(behaviour) do
+    Code.ensure_compiled!(behaviour)
+  rescue
+    ArgumentError ->
+      raise ArgumentError,
               "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
+  end
 
-      not function_exported?(behaviour, :behaviour_info, 1) ->
-        raise ArgumentError,
+  defp validate_behaviour!(behaviour) do
+    if function_exported?(behaviour, :behaviour_info, 1) do
+      behaviour
+    else
+      raise ArgumentError,
               "module #{inspect(behaviour)} is not a behaviour, please pass a behaviour to :for"
-
-      true ->
-        behaviour
     end
   end
 
@@ -380,7 +382,9 @@ defmodule Mox do
 
   defp generate_compile_time_dependency(behaviours) do
     for behaviour <- behaviours do
-      validate_behaviour!(behaviour)
+      behaviour
+      |> validate_module!()
+      |> validate_behaviour!()
 
       quote do
         @behaviour unquote(behaviour)
