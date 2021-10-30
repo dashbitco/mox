@@ -56,7 +56,7 @@ defmodule Mox do
   is to define the mock with `defmock/2`, usually in your `test_helper.exs`,
   and configure your application to use it:
 
-      Mox.defmock(MyApp.MockWeatherAPI, for: MyApp.Weather)
+      Mox.defmock(MyApp.MockWeatherAPI, for: MyApp.WeatherAPI)
       Application.put_env(:my_app, :weather, MyApp.MockWeatherAPI)
 
   Now in your tests, you can define expectations with `expect/4` and verify
