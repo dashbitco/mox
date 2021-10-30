@@ -1,8 +1,11 @@
 # Mox
-
+[![CI](https://github.com/dashbitco/mox/actions/workflows/ci.yml/badge.svg)](https://github.com/dashbitco/mox/actions/workflows/ci.yml)
 [![Hex.pm](https://img.shields.io/hexpm/v/mox.svg?style=flat-square)](https://hex.pm/packages/mox)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Total Download](https://img.shields.io/hexpm/dt/mox.svg)](https://hex.pm/packages/mox)
+[![Last Updated](https://img.shields.io/github/last-commit/dashbitco/mox.svg)](https://github.com/dashbitco/mox/commits/master)
 
-Mox is a library for defining concurrent mocks in Elixir.
+> Mox is a library for defining concurrent mocks in Elixir.
 
 The library follows the principles outlined in ["Mocks and explicit contracts"](https://dashbit.co/blog/mocks-and-explicit-contracts), summarized below:
 
