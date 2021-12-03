@@ -90,13 +90,20 @@ defmodule Mox do
 
   One last note, if the mock is used throughout the test suite, you might want
   the implementation to fall back to a stub (or actual) implementation when no
-  expectations are defined. You can use `stub_with/2` in your `test_helper.exs`
-  as follows:
+  expectations are defined. You can use `stub_with/2` in a case template that
+  is used throughout your test suite:
 
-      Mox.stub_with(MyApp.MockWeatherAPI, MyApp.StubWeatherAPI)
+      defmodule MyApp.Case do
+        use ExUnit.CaseTemplate
 
-  Now, if no expectations are defined it will call the implementation in
-  `MyApp.StubWeatherAPI`.
+        setup _ do
+          Mox.stub_with(MyApp.MockWeatherAPI, MyApp.StubWeatherAPI)
+        end
+      end
+
+  Now, for every test case that uses `ExUnit.Case`, it can use `MyApp.Case`
+  instead. Then, if no expectations are defined it will call the implementation
+  in `MyApp.StubWeatherAPI`.
 
   ## Multiple behaviours
 
