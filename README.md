@@ -31,6 +31,92 @@ end
 
 Mox should be automatically started unless the `:applications` key is set inside `def application` in your `mix.exs`. In such cases, you need to [remove the `:applications` key in favor of `:extra_applications`](https://elixir-lang.org/blog/2017/01/05/elixir-v1-4-0-released/#application-inference) or call `Application.ensure_all_started(:mox)` in your `test/test_helper.exs`.
 
+## Basic Usage
+
+### 1) Add behaviour, defining the contract:
+```elixir
+# lib/weather_behaviour.ex
+defmodule WeatherBehaviour do
+  @callback get_weather(binary()) :: {:ok, map()} | {:error, binary()}
+end
+```
+
+### 2) Add implementation for the behaviour
+```elixir
+# lib/weather_impl.ex
+defmodule WeatherImpl do
+  @moduledoc """
+  An implementation of a WeatherBehaviour
+  """
+
+  @behaviour WeatherBehaviour
+
+  @impl WeatherBehaviour
+  def get_weather(city) when is_binary(city) do
+    # Here you could call an external api directly with an HTTP client or use a third
+    # party library that does that work for you. In this example we send a
+    # request using a `httpc` to get back some html, which we can process later.
+
+    :inets.start()
+    :ssl.start()
+
+    case :httpc.request(:get, {"https://www.google.com/search?q=weather+#{city}", []}, [], []) do
+      {:ok, {_, _, html_content}} -> {:ok, %{body: html_content}}
+      error -> {:error, "Error getting weather: #{inspect(error)}"}
+    end
+  end
+end
+```
+
+### 3) Add a switch
+This can pull from your `config/config.exs`, `config/test.exs`, or, you can have no config as shown below and rely on a default. We also add a function to a higher level abstraction that will call the correct implementation:
+```elixir
+# bound.ex, the main context we chose to call this function from
+defmodule Bound do
+  def get_weather(city) do
+    weather_impl().get_weather(city)
+  end
+
+  defp weather_impl() do
+    Application.get_env(:bound, :weather, WeatherImpl)
+  end
+end
+```
+
+### 4) Define the mock so it is used during tests:
+```elixir
+# in test/test_helper.exs
+Mox.defmock(WeatherBehaviourMock, for: WeatherBehaviour) # <- Add this
+Application.put_env(:bound, :weather, WeatherBehaviourMock) # <- Add this
+ ExUnit.start()
+```
+
+### 5) Create a test and use `expect` so we can assert on the arguments that are passed to the mock.
+```elixir
+# test/bound_test.exs
+defmodule BoundTest do
+  use ExUnit.Case
+
+  import Mox
+
+  setup :verify_on_exit!
+
+  describe "get_weather/1" do
+    test "fetches weather based on a location" do
+      expect(WeatherBehaviourMock, :get_weather, fn args ->
+        # here we can assert on the arguments that get passed to the function
+        assert args == "Chicago"
+
+        # here we decide what the mock returns
+        {:ok, %{body: "Some html with weather data"}}
+      end)
+
+      assert {:ok, _} = Bound.get_weather("Chicago")
+    end
+  end
+end
+```
+
 ## Enforcing consistency with behaviour typespecs
 
 [Hammox](https://github.com/msz/hammox) is an enhanced version of Mox which automatically makes sure that calls to mocks match the typespecs defined in the behaviour. If you find this useful, see the [project homepage](https://github.com/msz/hammox).
