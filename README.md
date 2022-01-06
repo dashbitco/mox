@@ -33,7 +33,8 @@ Mox should be automatically started unless the `:applications` key is set inside
 
 ## Basic Usage
 
-### 1) Add behaviour, defining the contract:
+### 1) Add behaviour, defining the contract
+
 ```elixir
 # lib/weather_behaviour.ex
 defmodule WeatherBehaviour do
@@ -42,6 +43,7 @@ end
 ```
 
 ### 2) Add implementation for the behaviour
+
 ```elixir
 # lib/weather_impl.ex
 defmodule WeatherImpl do
@@ -69,7 +71,9 @@ end
 ```
 
 ### 3) Add a switch
+
 This can pull from your `config/config.exs`, `config/test.exs`, or, you can have no config as shown below and rely on a default. We also add a function to a higher level abstraction that will call the correct implementation:
+
 ```elixir
 # bound.ex, the main context we chose to call this function from
 defmodule Bound do
@@ -83,15 +87,18 @@ defmodule Bound do
 end
 ```
 
-### 4) Define the mock so it is used during tests:
+### 4) Define the mock so it is used during tests
+
 ```elixir
-# in test/test_helper.exs
+# In your test/test_helper.exs
 Mox.defmock(WeatherBehaviourMock, for: WeatherBehaviour) # <- Add this
 Application.put_env(:bound, :weather, WeatherBehaviourMock) # <- Add this
- ExUnit.start()
+
+ExUnit.start()
 ```
 
-### 5) Create a test and use `expect` so we can assert on the arguments that are passed to the mock.
+### 5) Create a test and use `expect` to assert on the mock arguments
+
 ```elixir
 # test/bound_test.exs
 defmodule BoundTest do
