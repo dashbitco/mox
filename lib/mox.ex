@@ -253,6 +253,13 @@ defmodule Mox do
   `verify!/0`.
   """
 
+  @typedoc """
+  A mock module.
+
+  This type is available since version 1.1+ of Mox.
+  """
+  @type t() :: module()
+
   defmodule UnexpectedCallError do
     defexception [:message]
   end
@@ -272,6 +279,7 @@ defmodule Mox do
       setup :set_mox_private
 
   """
+  @spec set_mox_private(term()) :: :ok
   def set_mox_private(_context \\ %{}), do: Mox.Server.set_mode(self(), :private)
 
   @doc """
@@ -286,6 +294,7 @@ defmodule Mox do
 
       setup :set_mox_global
   """
+  @spec set_mox_global(term()) :: :ok
   def set_mox_global(context \\ %{}) do
     if Map.get(context, :async) do
       raise "Mox cannot be set to global mode when the ExUnit case is async. " <>
@@ -306,6 +315,7 @@ defmodule Mox do
       setup :set_mox_from_context
 
   """
+  @spec set_mox_from_context(term()) :: :ok
   def set_mox_from_context(%{async: true} = _context), do: set_mox_private()
   def set_mox_from_context(_context), do: set_mox_global()
 
@@ -317,6 +327,15 @@ defmodule Mox do
   With multiple behaviours:
 
       Mox.defmock(MyMock, for: [MyBehaviour, MyOtherBehaviour])
+
+  ## Options
+
+    * `:for` - module or list of modules to define the mock module for.
+
+    * `:moduledoc` - `@moduledoc` for the defined mock module.
+
+    * `:skip_optional_callbacks` - boolean to determine whether to skip
+      or generate optional callbacks in the mock module.
 
   ## Skipping optional callbacks
 
@@ -342,6 +361,12 @@ defmodule Mox do
       Mox.defmock(MyMock, for: MyBehaviour, moduledoc: "My mock module.")
 
   """
+  @spec defmock(mock, [option]) :: mock
+        when mock: t(),
+             option:
+               {:for, module() | [module()]}
+               | {:skip_optional_callbacks, boolean()}
+               | {:moduledoc, false | String.t()}
   def defmock(name, options) when is_atom(name) and is_list(options) do
     behaviours =
       case Keyword.fetch(options, :for) do
@@ -511,6 +536,7 @@ defmodule Mox do
 
       assert Weather.current_temp(location) == "Current temperature is unavailable"
   """
+  @spec expect(mock, atom(), non_neg_integer(), function()) :: mock when mock: t()
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 0 and is_function(code) do
     calls = List.duplicate(code, n)
@@ -536,6 +562,7 @@ defmodule Mox do
 
   `stub/3` will overwrite any previous calls to `stub/3`.
   """
+  @spec stub(mock, atom(), function()) :: mock when mock: t()
   def stub(mock, name, code)
       when is_atom(mock) and is_atom(name) and is_function(code) do
     add_expectation!(mock, name, code, {0, [], code})
@@ -567,6 +594,7 @@ defmodule Mox do
       stub(MyApp.MockWeatherAPI, :humidity, &MyApp.StubWeatherAPI.humidity/1)
 
   """
+  @spec stub_with(mock, module()) :: mock when mock: t()
   def stub_with(mock, module) when is_atom(mock) and is_atom(module) do
     mock_behaviours = mock.__mock_for__()
 
@@ -649,6 +677,7 @@ defmodule Mox do
       allow(MyMock, self(), SomeChildProcess)
 
   """
+  @spec allow(mock, pid(), term()) :: mock when mock: t()
   def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
     allowed_pid = GenServer.whereis(allowed_via)
 
@@ -692,6 +721,7 @@ defmodule Mox do
       setup :verify_on_exit!
 
   """
+  @spec verify_on_exit!(term()) :: :ok
   def verify_on_exit!(_context \\ %{}) do
     pid = self()
     Mox.Server.verify_on_exit(pid)
@@ -705,6 +735,7 @@ defmodule Mox do
   Verifies that all expectations set by the current process
   have been called.
   """
+  @spec verify!() :: :ok
   def verify! do
     verify_mock_or_all!(self(), :all, :test)
   end
@@ -712,6 +743,7 @@ defmodule Mox do
   @doc """
   Verifies that all expectations in `mock` have been called.
   """
+  @spec verify!(t()) :: :ok
   def verify!(mock) do
     validate_mock!(mock)
     verify_mock_or_all!(self(), mock, :test)
