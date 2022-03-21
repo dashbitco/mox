@@ -23,12 +23,12 @@ defmodule Mox do
 
       defmodule MyApp.HumanizedWeather do
         def display_temp({lat, long}) do
-          {:ok, temp} = MyApp.Weather.temp({lat, long})
+          {:ok, temp} = MyApp.WeatherAPI.temp({lat, long})
           "Current temperature is #{temp} degrees"
         end
 
         def display_humidity({lat, long}) do
-          {:ok, humidity} = MyApp.Weather.humidity({lat, long})
+          {:ok, humidity} = MyApp.WeatherAPI.humidity({lat, long})
           "Current humidity is #{humidity}%"
         end
       end
@@ -36,7 +36,7 @@ defmodule Mox do
   However, you want to test the code above without performing external
   API calls. How to do so?
 
-  First, it is important to define the `Weather` behaviour that we want
+  First, it is important to define the `WeatherAPI` behaviour that we want
   to mock. And we will define a proxy functions that will dispatch to
   the desired implementation:
 
