@@ -98,6 +98,7 @@ defmodule Mox do
 
         setup _ do
           Mox.stub_with(MyApp.MockWeatherAPI, MyApp.StubWeatherAPI)
+          :ok
         end
       end
 
