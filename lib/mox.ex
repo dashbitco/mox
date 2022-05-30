@@ -388,19 +388,8 @@ defmodule Mox do
     name
   end
 
-  @compile {:no_warn_undefined, {Code, :ensure_compiled!, 1}}
   defp validate_module!(behaviour) do
-    cond do
-      function_exported?(Code, :ensure_compiled!, 1) ->
-        Code.ensure_compiled!(behaviour)
-
-      Code.ensure_compiled(behaviour) == {:module, behaviour} ->
-        behaviour
-
-      true ->
-        raise ArgumentError,
-              "module #{inspect(behaviour)} is not available, please pass an existing module to :for"
-    end
+    ensure_compiled!(behaviour)
   end
 
   defp validate_behaviour!(behaviour) do
@@ -769,15 +758,29 @@ defmodule Mox do
   end
 
   defp validate_mock!(mock) do
-    cond do
-      Code.ensure_compiled(mock) != {:module, mock} ->
-        raise ArgumentError, "module #{inspect(mock)} is not available"
+    ensure_compiled!(mock)
 
-      not function_exported?(mock, :__mock_for__, 0) ->
-        raise ArgumentError, "module #{inspect(mock)} is not a mock"
+    unless function_exported?(mock, :__mock_for__, 0) do
+      raise ArgumentError, "module #{inspect(mock)} is not a mock"
+    end
 
-      true ->
-        :ok
+    :ok
+  end
+
+  @compile {:no_warn_undefined, {Code, :ensure_compiled!, 1}}
+
+  defp ensure_compiled!(mod) do
+    if function_exported?(Code, :ensure_compiled!, 1) do
+      Code.ensure_compiled!(mod)
+    else
+      case Code.ensure_compiled(mod) do
+        {:module, mod} ->
+          mod
+
+        {:error, reason} ->
+          raise ArgumentError,
+                "could not load module #{inspect(mod)} due to reason #{inspect(reason)}"
+      end
     end
   end
 
