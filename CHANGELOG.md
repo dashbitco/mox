@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.2 (2022-05-30)
+
+### Bug fix
+
+  * Use `Code.ensure_compiled!` to support better integration with the Elixir compiler
+
 ## v1.0.1 (2020-10-15)
 
 ### Bug fix
