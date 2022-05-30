@@ -270,7 +270,7 @@ defmodule MoxTest do
     end
 
     test "raises if a non-mock is given" do
-      assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
+      assert_raise ArgumentError, ~r"could not load module Unknown", fn ->
         expect(Unknown, :add, fn x, y -> x + y end)
       end
 
@@ -426,7 +426,7 @@ defmodule MoxTest do
     end
 
     test "raises if a non-mock is given" do
-      assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
+      assert_raise ArgumentError, ~r"could not load module Unknown", fn ->
         verify!(Unknown)
       end
 
@@ -555,7 +555,7 @@ defmodule MoxTest do
 
     test "raises if a non-mock is given" do
       in_all_modes(fn ->
-        assert_raise ArgumentError, ~r"module Unknown is not available", fn ->
+        assert_raise ArgumentError, ~r"could not load module Unknown", fn ->
           stub(Unknown, :add, fn x, y -> x + y end)
         end
 
