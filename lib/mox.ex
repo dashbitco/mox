@@ -802,6 +802,16 @@ defmodule Mox do
               "expected #{mfa} to be called #{times(count)} but it has been " <>
                 "called #{times(count + 1)} in #{format_process()}"
 
+      {:remote, fun_to_call} ->
+        # it's possible that Mox.Server is running on a remote node in the cluster.  Since the lambda
+        # that we passed is not guaranteed to exist on this node (it might have come from a .exs file)
+        # find the remote node that hosts Mox.Server, and run the lambda on that node.
+
+        Mox.Server
+        |> :global.whereis_name()
+        |> node
+        |> :rpc.call(Kernel, :apply, [fun_to_call, args])
+
       {:ok, fun_to_call} ->
         apply(fun_to_call, args)
     end

@@ -3,35 +3,42 @@ defmodule Mox.Server do
 
   use GenServer
   @timeout 30000
+  @this {:global, __MODULE__}
 
   # API
 
   def start_link(_options) do
-    GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
+    case GenServer.start_link(__MODULE__, :ok, name: @this) do
+      {:error, {:already_started, _}} ->
+        :ignore
+
+      other ->
+        other
+    end
   end
 
   def add_expectation(owner_pid, key, value) do
-    GenServer.call(__MODULE__, {:add_expectation, owner_pid, key, value}, @timeout)
+    GenServer.call(@this, {:add_expectation, owner_pid, key, value}, @timeout)
   end
 
   def fetch_fun_to_dispatch(caller_pids, key) do
-    GenServer.call(__MODULE__, {:fetch_fun_to_dispatch, caller_pids, key}, @timeout)
+    GenServer.call(@this, {:fetch_fun_to_dispatch, caller_pids, key, self()}, @timeout)
   end
 
   def verify(owner_pid, for, test_or_on_exit) do
-    GenServer.call(__MODULE__, {:verify, owner_pid, for, test_or_on_exit}, @timeout)
+    GenServer.call(@this, {:verify, owner_pid, for, test_or_on_exit}, @timeout)
   end
 
   def verify_on_exit(pid) do
-    GenServer.call(__MODULE__, {:verify_on_exit, pid}, @timeout)
+    GenServer.call(@this, {:verify_on_exit, pid}, @timeout)
   end
 
   def allow(mock, owner_pid, pid) do
-    GenServer.call(__MODULE__, {:allow, mock, owner_pid, pid}, @timeout)
+    GenServer.call(@this, {:allow, mock, owner_pid, pid}, @timeout)
   end
 
   def set_mode(owner_pid, mode) do
-    GenServer.call(__MODULE__, {:set_mode, owner_pid, mode})
+    GenServer.call(@this, {:set_mode, owner_pid, mode})
   end
 
   # Callbacks
@@ -104,7 +111,7 @@ defmodule Mox.Server do
   end
 
   def handle_call(
-        {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key},
+        {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key, source},
         %{mode: :private} = state
       ) do
     owner_pid =
@@ -124,16 +131,16 @@ defmodule Mox.Server do
         {:reply, {:out_of_expectations, total}, state}
 
       {_, [], stub} ->
-        {:reply, {:ok, stub}, state}
+        {:reply, {ok_or_remote(source), stub}, state}
 
       {total, [call | calls], stub} ->
         new_state = put_in(state.expectations[owner_pid][key], {total, calls, stub})
-        {:reply, {:ok, call}, new_state}
+        {:reply, {ok_or_remote(source), call}, new_state}
     end
   end
 
   def handle_call(
-        {:fetch_fun_to_dispatch, _caller_pids, {_mock, _, _} = key},
+        {:fetch_fun_to_dispatch, _caller_pids, {_mock, _, _} = key, source},
         %{mode: :global} = state
       ) do
     case state.expectations[state.global_owner_pid][key] do
@@ -144,11 +151,11 @@ defmodule Mox.Server do
         {:reply, {:out_of_expectations, total}, state}
 
       {_, [], stub} ->
-        {:reply, {:ok, stub}, state}
+        {:reply, {ok_or_remote(source), stub}, state}
 
       {total, [call | calls], stub} ->
         new_state = put_in(state.expectations[state.global_owner_pid][key], {total, calls, stub})
-        {:reply, {:ok, call}, new_state}
+        {:reply, {ok_or_remote(source), call}, new_state}
     end
   end
 
@@ -251,4 +258,7 @@ defmodule Mox.Server do
   defp merge_expectation({current_n, current_calls, _current_stub}, {n, calls, stub}) do
     {current_n + n, current_calls ++ calls, stub}
   end
+
+  defp ok_or_remote(source) when node(source) == node(), do: :ok
+  defp ok_or_remote(_source), do: :remote
 end
