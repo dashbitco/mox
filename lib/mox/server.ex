@@ -260,5 +260,5 @@ defmodule Mox.Server do
   end
 
   defp ok_or_remote(source) when node(source) == node(), do: :ok
-  defp ok_or_remote(source), do: :remote
+  defp ok_or_remote(_source), do: :remote
 end
