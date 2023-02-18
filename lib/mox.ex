@@ -37,7 +37,7 @@ defmodule Mox do
   API calls. How to do so?
 
   First, it is important to define the `WeatherAPI` behaviour that we want
-  to mock. And we will define a proxy functions that will dispatch to
+  to mock. And we will define a proxy function that will dispatch to
   the desired implementation:
 
       defmodule MyApp.WeatherAPI do
