@@ -33,8 +33,8 @@ defmodule Mox.Server do
     GenServer.call(@this, {:verify_on_exit, pid}, @timeout)
   end
 
-  def allow(mock, owner_pid, pid) do
-    GenServer.call(@this, {:allow, mock, owner_pid, pid}, @timeout)
+  def allow(mock, owner_pid, pid_or_promise) do
+    GenServer.call(@this, {:allow, mock, owner_pid, pid_or_promise}, @timeout)
   end
 
   def set_mode(owner_pid, mode) do
@@ -44,7 +44,15 @@ defmodule Mox.Server do
   # Callbacks
 
   def init(:ok) do
-    {:ok, %{expectations: %{}, allowances: %{}, deps: %{}, mode: :private, global_owner_pid: nil}}
+    {:ok,
+     %{
+       expectations: %{},
+       allowances: %{},
+       deps: %{},
+       mode: :private,
+       global_owner_pid: nil,
+       promises: false
+     }}
   end
 
   def handle_call(msg, _from, state) do
@@ -112,8 +120,10 @@ defmodule Mox.Server do
 
   def handle_call(
         {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key, source},
-        %{mode: :private} = state
+        %{mode: :private, promises: promises} = state
       ) do
+    state = maybe_revalidate_promises(promises, state)
+
     owner_pid =
       Enum.find_value(caller_pids, List.first(caller_pids), fn caller_pid ->
         cond do
@@ -205,7 +215,11 @@ defmodule Mox.Server do
             {on, [{pid, mock} | deps]}
           end)
 
-        state = put_in(state, [:allowances, pid_map(pid), mock], owner_pid)
+        state =
+          state
+          |> put_in([:allowances, pid_map(pid), mock], owner_pid)
+          |> update_in([:promises], &(&1 or match?({:promise, _}, pid)))
+
         {:reply, :ok, state}
     end
   end
@@ -261,4 +275,43 @@ defmodule Mox.Server do
 
   defp ok_or_remote(source) when node(source) == node(), do: :ok
   defp ok_or_remote(_source), do: :remote
+
+  defp maybe_revalidate_promises(false, state), do: state
+
+  defp maybe_revalidate_promises(true, state) do
+    state.allowances
+    |> Enum.reduce({[], [], false}, fn
+      {{:promise, fun} = key, value}, {result, resolved, unresolved} ->
+        case fun.() do
+          pid when is_pid(pid) ->
+            {[{pid, value} | result], [{fun, pid} | resolved], unresolved}
+
+          _ ->
+            {[{key, value} | result], resolved, true}
+        end
+
+      kv, {result, resolved, unresolved} ->
+        {[kv | result], resolved, unresolved}
+    end)
+    |> fix_resolved(state)
+  end
+
+  defp fix_resolved({_, [], _}, state), do: state
+
+  defp fix_resolved({allowances, fun_to_pids, promises}, state) do
+    fun_to_pids = Map.new(fun_to_pids)
+
+    deps =
+      Map.new(state.deps, fn {pid, {fun, deps}} ->
+        deps =
+          Enum.map(deps, fn
+            {{:promise, fun}, mock} -> {Map.get(fun_to_pids, fun, {:promise, fun}), mock}
+            other -> other
+          end)
+
+        {pid, {fun, deps}}
+      end)
+
+    %{state | deps: deps, allowances: Map.new(allowances), promises: promises}
+  end
 end
