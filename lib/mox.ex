@@ -187,10 +187,9 @@ defmodule Mox do
 
   Under some circumstances, the process might not have been already started
   when the allowance happens. In such a case, you might specify the allowance
-  as a lazy/deferred function call in a form `(-> pid())`. This function
-  would be resolved late, at the very moment of dispatch. Please note, that no
-  additional diagnostics could have been provided for lazy calls, and it would
-  either succeed, or fail with `Mox.UnexpectedCallError`. 
+  as a function in the form `(-> pid())`. This function would be resolved late,
+  at the very moment of dispatch. If the function does not return an existing
+  PID, it will fail `Mox.UnexpectedCallError`. 
 
   ### Global mode
 
@@ -680,9 +679,9 @@ defmodule Mox do
       allow(MyMock, self(), SomeChildProcess)
 
   If the process is not yet started at the moment of allowance definition,
-  it might be allowed as a lazy call, assuming at the moment of validation
+  it might be allowed as a function, assuming at the moment of invocation
   it would have been started. If the function cannot be resolved to a `pid`
-  during call dispatch, the expectation would not succeed.
+  during invocation, the expectation will not succeed.
 
       allow(MyMock, self(), fn -> GenServer.whereis(Deferred) end)
   """
