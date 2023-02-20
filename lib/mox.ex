@@ -183,6 +183,15 @@ defmodule Mox do
   `$callers` is used to determine the process that actually defined the
   expectations.
 
+  #### Explicit allowances as promises
+
+  Under some circumstances, the process might not have been already started
+  when the allowance happens. In such a case, you might specify the allowance
+  as a promise in a form `{:promise, (-> pid())}`. This promise would be
+  resolving late, at the very moment of dispatch. Please note, that no
+  additional diagnostics could have been provided for promises, and it would
+  either succeed, or fail with `Mox.UnexpectedCallError`. 
+
   ### Global mode
 
   Mox supports global mode, where any process can consume mocks and stubs
@@ -670,6 +679,12 @@ defmodule Mox do
 
       allow(MyMock, self(), SomeChildProcess)
 
+  If the process is not yet started at the moment of allowance definition,
+  it might be allowed as a promise, assuming at the moment of validation
+  it would have been started. If the function cannot be resolved to a `pid`
+  during call dispatch, the expectation would not succeed.
+
+      allow(MyMock, self(), {:promise, fn -> GenServer.whereis(Deferred) end})
   """
   @spec allow(mock, pid(), term()) :: mock when mock: t()
   def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
