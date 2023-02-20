@@ -841,8 +841,8 @@ defmodule MoxTest do
       assert add_result == :expected
     end
 
-    test "allowances support promises for processes registered through a Registry" do
-      defmodule CalculatorServer_Promises do
+    test "allowances support lazy calls for processes registered through a Registry" do
+      defmodule CalculatorServer_Lazy do
         use GenServer
 
         def init(args) do
@@ -856,13 +856,13 @@ defmodule MoxTest do
       end
 
       {:ok, _} = Registry.start_link(keys: :unique, name: Registry.Test)
-      name = {:via, Registry, {Registry.Test, :test_process_promise}}
+      name = {:via, Registry, {Registry.Test, :test_process_lazy}}
 
       CalcMock
       |> expect(:add, fn _, _ -> :expected end)
       |> allow(self(), fn -> GenServer.whereis(name) end)
 
-      {:ok, _} = GenServer.start_link(CalculatorServer_Promises, [], name: name)
+      {:ok, _} = GenServer.start_link(CalculatorServer_Lazy, [], name: name)
       add_result = GenServer.call(name, :call_mock)
       assert add_result == :expected
     end
