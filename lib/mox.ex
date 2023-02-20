@@ -183,6 +183,14 @@ defmodule Mox do
   `$callers` is used to determine the process that actually defined the
   expectations.
 
+  #### Explicit allowances as lazy/deferred functions
+
+  Under some circumstances, the process might not have been already started
+  when the allowance happens. In such a case, you might specify the allowance
+  as a function in the form `(-> pid())`. This function would be resolved late,
+  at the very moment of dispatch. If the function does not return an existing
+  PID, it will fail `Mox.UnexpectedCallError`. 
+
   ### Global mode
 
   Mox supports global mode, where any process can consume mocks and stubs
@@ -670,22 +678,33 @@ defmodule Mox do
 
       allow(MyMock, self(), SomeChildProcess)
 
+  If the process is not yet started at the moment of allowance definition,
+  it might be allowed as a function, assuming at the moment of invocation
+  it would have been started. If the function cannot be resolved to a `pid`
+  during invocation, the expectation will not succeed.
+
+      allow(MyMock, self(), fn -> GenServer.whereis(Deferred) end)
   """
   @spec allow(mock, pid(), term()) :: mock when mock: t()
   def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
-    allowed_pid = GenServer.whereis(allowed_via)
+    allowed_pid_or_function =
+      case allowed_via do
+        fun when is_function(fun, 0) -> fun
+        pid_or_name -> GenServer.whereis(pid_or_name)
+      end
 
-    if allowed_pid == owner_pid do
+    if allowed_pid_or_function == owner_pid do
       raise ArgumentError, "owner_pid and allowed_pid must be different"
     end
 
-    case Mox.Server.allow(mock, owner_pid, allowed_pid) do
+    case Mox.Server.allow(mock, owner_pid, allowed_pid_or_function) do
       :ok ->
         mock
 
       {:error, {:already_allowed, actual_pid}} ->
         raise ArgumentError, """
-        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)} \
+        cannot allow #{inspect(allowed_pid_or_function)} to use #{inspect(mock)} \
+        from #{inspect(owner_pid)} \
         because it is already allowed by #{inspect(actual_pid)}.
 
         If you are seeing this error message, it is because you are either \
@@ -696,7 +715,8 @@ defmodule Mox do
 
       {:error, :expectations_defined} ->
         raise ArgumentError, """
-        cannot allow #{inspect(allowed_pid)} to use #{inspect(mock)} from #{inspect(owner_pid)} \
+        cannot allow #{inspect(allowed_pid_or_function)} to use \
+        #{inspect(mock)} from #{inspect(owner_pid)} \
         because the process has already defined its own expectations/stubs
         """
 

@@ -62,7 +62,10 @@ defmodule MoxTest do
     end
 
     test "accepts false to indicate all functions should be generated" do
-      defmock(MyFalseMock, for: [Calculator, ScientificCalculator], skip_optional_callbacks: false)
+      defmock(MyFalseMock,
+        for: [Calculator, ScientificCalculator],
+        skip_optional_callbacks: false
+      )
 
       all_callbacks = ScientificCalculator.behaviour_info(:callbacks)
       assert all_callbacks -- MyFalseMock.__info__(:functions) == []
@@ -834,6 +837,32 @@ defmodule MoxTest do
       |> expect(:add, fn _, _ -> :expected end)
       |> allow(self(), name)
 
+      add_result = GenServer.call(name, :call_mock)
+      assert add_result == :expected
+    end
+
+    test "allowances support lazy calls for processes registered through a Registry" do
+      defmodule CalculatorServer_Lazy do
+        use GenServer
+
+        def init(args) do
+          {:ok, args}
+        end
+
+        def handle_call(:call_mock, _from, []) do
+          add_result = CalcMock.add(1, 1)
+          {:reply, add_result, []}
+        end
+      end
+
+      {:ok, _} = Registry.start_link(keys: :unique, name: Registry.Test)
+      name = {:via, Registry, {Registry.Test, :test_process_lazy}}
+
+      CalcMock
+      |> expect(:add, fn _, _ -> :expected end)
+      |> allow(self(), fn -> GenServer.whereis(name) end)
+
+      {:ok, _} = GenServer.start_link(CalculatorServer_Lazy, [], name: name)
       add_result = GenServer.call(name, :call_mock)
       assert add_result == :expected
     end
