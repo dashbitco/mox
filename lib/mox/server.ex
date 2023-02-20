@@ -218,7 +218,7 @@ defmodule Mox.Server do
         state =
           state
           |> put_in([:allowances, pid_map(pid), mock], owner_pid)
-          |> update_in([:promises], &(&1 or match?({:promise, _}, pid)))
+          |> update_in([:promises], &(&1 or match?(fun when is_function(fun, 0), pid)))
 
         {:reply, :ok, state}
     end
@@ -281,10 +281,10 @@ defmodule Mox.Server do
   defp maybe_revalidate_promises(true, state) do
     state.allowances
     |> Enum.reduce({[], [], false}, fn
-      {{:promise, fun} = key, value}, {result, resolved, unresolved} ->
-        case fun.() do
+      {key, value}, {result, resolved, unresolved} when is_function(key, 0) ->
+        case key.() do
           pid when is_pid(pid) ->
-            {[{pid, value} | result], [{fun, pid} | resolved], unresolved}
+            {[{pid, value} | result], [{key, pid} | resolved], unresolved}
 
           _ ->
             {[{key, value} | result], resolved, true}
@@ -305,7 +305,7 @@ defmodule Mox.Server do
       Map.new(state.deps, fn {pid, {fun, deps}} ->
         deps =
           Enum.map(deps, fn
-            {{:promise, fun}, mock} -> {Map.get(fun_to_pids, fun, {:promise, fun}), mock}
+            {fun, mock} when is_function(fun, 0) -> {Map.get(fun_to_pids, fun, fun), mock}
             other -> other
           end)
 

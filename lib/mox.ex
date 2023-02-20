@@ -187,7 +187,7 @@ defmodule Mox do
 
   Under some circumstances, the process might not have been already started
   when the allowance happens. In such a case, you might specify the allowance
-  as a promise in a form `{:promise, (-> pid())}`. This promise would be
+  as a promise in a form `(-> pid())`. This promise would be
   resolving late, at the very moment of dispatch. Please note, that no
   additional diagnostics could have been provided for promises, and it would
   either succeed, or fail with `Mox.UnexpectedCallError`. 
@@ -684,14 +684,14 @@ defmodule Mox do
   it would have been started. If the function cannot be resolved to a `pid`
   during call dispatch, the expectation would not succeed.
 
-      allow(MyMock, self(), {:promise, fn -> GenServer.whereis(Deferred) end})
+      allow(MyMock, self(), fn -> GenServer.whereis(Deferred) end)
   """
   @spec allow(mock, pid(), term()) :: mock when mock: t()
   def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
     allowed_pid_or_promise =
       case allowed_via do
-        {:promise, fun} when is_function(fun, 0) -> allowed_via
-        _ -> GenServer.whereis(allowed_via)
+        fun when is_function(fun, 0) -> fun
+        pid_or_name -> GenServer.whereis(pid_or_name)
       end
 
     if allowed_pid_or_promise == owner_pid do

@@ -860,7 +860,7 @@ defmodule MoxTest do
 
       CalcMock
       |> expect(:add, fn _, _ -> :expected end)
-      |> allow(self(), {:promise, fn -> GenServer.whereis(name) end})
+      |> allow(self(), fn -> GenServer.whereis(name) end)
 
       {:ok, _} = GenServer.start_link(CalculatorServer_Promises, [], name: name)
       add_result = GenServer.call(name, :call_mock)
