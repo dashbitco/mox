@@ -949,7 +949,6 @@ defmodule MoxTest do
   end
 
   describe "get_executed_calls/1" do
-    @describetag :focus
     test "returns all the calls executed on the given mock (in private mode)" do
       set_mox_private()
 
