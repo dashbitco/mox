@@ -948,6 +948,67 @@ defmodule MoxTest do
     end
   end
 
+  describe "get_executed_calls/1" do
+    @describetag :focus
+    test "returns all the calls executed on the given mock (in private mode)" do
+      set_mox_private()
+
+      assert Mox.get_executed_calls(CalcMock) == []
+
+      expect(CalcMock, :add, fn x, y -> x + y end)
+      assert Mox.get_executed_calls(CalcMock) == []
+
+      assert CalcMock.add(2, 3) == 5
+      expect(CalcMock, :add, fn x, y -> x + y end)
+
+      expect(CalcMock, :add, 2, fn x, y -> x + y end)
+      assert CalcMock.add(3, 4) == 7
+      assert CalcMock.add(4, 5) == 9
+      assert Mox.get_executed_calls(CalcMock) == [{:add, [2, 3]}, {:add, [3, 4]}, {:add, [4, 5]}]
+
+      stub(CalcMock, :add, fn x, y -> x + y end)
+
+      for _ <- 1..3 do
+        assert CalcMock.add(1, -1) == 0
+      end
+
+      assert Mox.get_executed_calls(CalcMock) ==
+               [{:add, [2, 3]}, {:add, [3, 4]}, {:add, [4, 5]}] ++
+                 List.duplicate({:add, [1, -1]}, 3)
+
+      verify!(CalcMock)
+    end
+
+    test "returns all the calls executed on the given mock (in global mode)" do
+      set_mox_global()
+
+      assert Mox.get_executed_calls(CalcMock) == []
+
+      expect(CalcMock, :add, fn x, y -> x + y end)
+      assert Mox.get_executed_calls(CalcMock) == []
+
+      assert CalcMock.add(2, 3) == 5
+      expect(CalcMock, :add, fn x, y -> x + y end)
+
+      expect(CalcMock, :add, 2, fn x, y -> x + y end)
+      assert CalcMock.add(3, 4) == 7
+      assert CalcMock.add(4, 5) == 9
+      assert Mox.get_executed_calls(CalcMock) == [{:add, [2, 3]}, {:add, [3, 4]}, {:add, [4, 5]}]
+
+      stub(CalcMock, :add, fn x, y -> x + y end)
+
+      for _ <- 1..3 do
+        assert CalcMock.add(1, -1) == 0
+      end
+
+      assert Mox.get_executed_calls(CalcMock) ==
+               [{:add, [2, 3]}, {:add, [3, 4]}, {:add, [4, 5]}] ++
+                 List.duplicate({:add, [1, -1]}, 3)
+
+      verify!(CalcMock)
+    end
+  end
+
   defp async_no_callers(fun) do
     Task.async(fn ->
       Process.delete(:"$callers")

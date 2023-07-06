@@ -21,8 +21,8 @@ defmodule Mox.Server do
     GenServer.call(@this, {:add_expectation, owner_pid, key, value}, @timeout)
   end
 
-  def fetch_fun_to_dispatch(caller_pids, key) do
-    GenServer.call(@this, {:fetch_fun_to_dispatch, caller_pids, key, self()}, @timeout)
+  def fetch_fun_to_dispatch(caller_pids, key, args) do
+    GenServer.call(@this, {:fetch_fun_to_dispatch, caller_pids, key, args, self()}, @timeout)
   end
 
   def verify(owner_pid, for, test_or_on_exit) do
@@ -41,6 +41,10 @@ defmodule Mox.Server do
     GenServer.call(@this, {:set_mode, owner_pid, mode})
   end
 
+  def get_executed_calls(mock) do
+    GenServer.call(@this, {:get_executed_calls, mock})
+  end
+
   # Callbacks
 
   def init(:ok) do
@@ -51,7 +55,8 @@ defmodule Mox.Server do
        deps: %{},
        mode: :private,
        global_owner_pid: nil,
-       lazy_calls: false
+       lazy_calls: false,
+       executed_calls: %{}
      }}
   end
 
@@ -119,7 +124,7 @@ defmodule Mox.Server do
   end
 
   def handle_call(
-        {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key, source},
+        {:fetch_fun_to_dispatch, caller_pids, {mock, function_name, _} = key, args, source},
         %{mode: :private, lazy_calls: lazy_calls} = state
       ) do
     state = maybe_revalidate_lazy_calls(lazy_calls, state)
@@ -141,16 +146,18 @@ defmodule Mox.Server do
         {:reply, {:out_of_expectations, total}, state}
 
       {_, [], stub} ->
+        state = update_in(state.executed_calls[mock], &((&1 || []) ++ [{function_name, args}]))
         {:reply, {ok_or_remote(source), stub}, state}
 
       {total, [call | calls], stub} ->
+        state = update_in(state.executed_calls[mock], &((&1 || []) ++ [{function_name, args}]))
         new_state = put_in(state.expectations[owner_pid][key], {total, calls, stub})
         {:reply, {ok_or_remote(source), call}, new_state}
     end
   end
 
   def handle_call(
-        {:fetch_fun_to_dispatch, _caller_pids, {_mock, _, _} = key, source},
+        {:fetch_fun_to_dispatch, _caller_pids, {mock, function_name, _} = key, args, source},
         %{mode: :global} = state
       ) do
     case state.expectations[state.global_owner_pid][key] do
@@ -161,9 +168,11 @@ defmodule Mox.Server do
         {:reply, {:out_of_expectations, total}, state}
 
       {_, [], stub} ->
+        state = update_in(state.executed_calls[mock], &((&1 || []) ++ [{function_name, args}]))
         {:reply, {ok_or_remote(source), stub}, state}
 
       {total, [call | calls], stub} ->
+        state = update_in(state.executed_calls[mock], &((&1 || []) ++ [{function_name, args}]))
         new_state = put_in(state.expectations[state.global_owner_pid][key], {total, calls, stub})
         {:reply, {ok_or_remote(source), call}, new_state}
     end
@@ -171,6 +180,8 @@ defmodule Mox.Server do
 
   def handle_call({:verify, owner_pid, mock, test_or_on_exit}, state) do
     expectations = state.expectations[owner_pid] || %{}
+
+    state = put_in(state.executed_calls, %{})
 
     pending =
       for {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expectations,
@@ -231,6 +242,11 @@ defmodule Mox.Server do
 
   def handle_call({:set_mode, _owner_pid, :private}, state) do
     {:reply, :ok, %{state | mode: :private, global_owner_pid: nil}}
+  end
+
+  def handle_call({:get_executed_calls, mock}, state) do
+    calls = Map.get(state.executed_calls, mock, [])
+    {:reply, calls, state}
   end
 
   # Helper functions

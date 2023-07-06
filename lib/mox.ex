@@ -189,7 +189,7 @@ defmodule Mox do
   when the allowance happens. In such a case, you might specify the allowance
   as a function in the form `(-> pid())`. This function would be resolved late,
   at the very moment of dispatch. If the function does not return an existing
-  PID, it will fail `Mox.UnexpectedCallError`. 
+  PID, it will fail `Mox.UnexpectedCallError`.
 
   ### Global mode
 
@@ -763,6 +763,11 @@ defmodule Mox do
     verify_mock_or_all!(self(), mock, :test)
   end
 
+  def get_executed_calls(mock) do
+    validate_mock!(mock)
+    Mox.Server.get_executed_calls(mock)
+  end
+
   defp verify_mock_or_all!(pid, mock, test_or_on_exit) do
     pending = Mox.Server.verify(pid, mock, test_or_on_exit)
 
@@ -812,7 +817,7 @@ defmodule Mox do
   def __dispatch__(mock, name, arity, args) do
     all_callers = [self() | caller_pids()]
 
-    case Mox.Server.fetch_fun_to_dispatch(all_callers, {mock, name, arity}) do
+    case Mox.Server.fetch_fun_to_dispatch(all_callers, {mock, name, arity}, args) do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
 
