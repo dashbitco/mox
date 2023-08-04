@@ -413,13 +413,11 @@ defmodule MoxTest do
       message = ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
       assert_raise Mox.VerificationError, message, &verify!/0
 
-      task =
-        Task.Supervisor.async_nolink(MoxTests.TaskSupervisor, fn ->
-          CalcMock.add(2, 3)
-          CalcMock.add(4, 5)
-        end)
-
-      Task.yield(task)
+      Task.Supervisor.async_nolink(MoxTests.TaskSupervisor, fn ->
+        CalcMock.add(2, 3)
+        CalcMock.add(4, 5)
+      end)
+      |> Task.yield()
 
       message = ~r"expected CalcMock.add/2 to be invoked once but it was invoked 2 times"
       assert_raise Mox.VerificationError, message, &verify!/0
@@ -444,6 +442,25 @@ defmodule MoxTest do
       assert_raise Mox.VerificationError, message, &verify!/0
     end
 
+    test "verifies when mocks are over-called in the process in private mode" do
+      set_mox_private()
+
+      verify!(CalcMock)
+      expect(CalcMock, :add, 1, fn x, y -> x + y end)
+      expect(SciCalcOnlyMock, :exponent, fn x, y -> x * y end)
+
+      # Emulate mock calls within code that has aggressive error handling
+      try do
+        CalcMock.add(1, 2)
+        CalcMock.add(3, 4)
+      catch _, _ ->
+        :ok
+      end
+
+      message = ~r"expected CalcMock.add/2 to be invoked once but it was invoked 2 times"
+      assert_raise Mox.VerificationError, message, fn -> verify!(CalcMock) end
+    end
+
     test "verifies all mocks for current process in global mode" do
       set_mox_global()
 
@@ -465,6 +482,26 @@ defmodule MoxTest do
 
       message = ~r"expected CalcMock.add/2 to be invoked 2 times but it was invoked once"
       assert_raise Mox.VerificationError, message, &verify!/0
+    end
+
+    test "verifies mocks are over-called for the current process in global mode" do
+      set_mox_global()
+
+      verify!()
+      expect(CalcMock, :add, 1, fn x, y -> x + y end)
+      expect(SciCalcOnlyMock, :exponent, fn x, y -> x * y end)
+
+      message = ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
+      assert_raise Mox.VerificationError, message, fn -> verify!(CalcMock) end
+
+      Task.Supervisor.async_nolink(MoxTests.TaskSupervisor, fn ->
+        CalcMock.add(2, 3)
+        CalcMock.add(4, 5)
+      end)
+      |> Task.yield
+
+      message = ~r"expected CalcMock.add/2 to be invoked once but it was invoked 2 times"
+      assert_raise Mox.VerificationError, message, fn -> verify!(CalcMock) end
     end
 
     test "raises if a non-mock is given" do
