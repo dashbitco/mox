@@ -405,6 +405,7 @@ defmodule MoxTest do
     end
 
     test "verifies mocks are over-called for the current process in global mode" do
+      start_supervised!({Task.Supervisor, name: MoxTests.TaskSupervisor})
       set_mox_global()
 
       verify!()
@@ -485,6 +486,7 @@ defmodule MoxTest do
     end
 
     test "verifies mocks are over-called for the current process in global mode" do
+      start_supervised!({Task.Supervisor, name: MoxTests.TaskSupervisor})
       set_mox_global()
 
       verify!()
