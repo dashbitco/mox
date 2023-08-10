@@ -1,4 +1,5 @@
 Mox.defmock(CalcMock, for: Calculator)
+Mox.defmock(SciCalcOnlyMock, for: ScientificCalculator)
 Mox.defmock(SciCalcMock, for: [Calculator, ScientificCalculator])
 
 Mox.defmock(SciCalcMockWithoutOptional,
