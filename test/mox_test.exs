@@ -353,38 +353,23 @@ defmodule MoxTest do
       expect(CalcMock, :add, fn x, y -> x + y end)
       expect(SciCalcOnlyMock, :exponent, fn x, y -> x * y end)
 
-      assert_raise(Mox.VerificationError, &verify!/0)
-      try do
-        verify!()
-      rescue
-        error in Mox.VerificationError ->
-          assert error.message =~ ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
-          assert error.message =~ ~r"expected SciCalcOnlyMock.exponent/2 to be invoked once but it was invoked 0 times"
-      end
+      error = assert_raise(Mox.VerificationError, &verify!/0)
+      assert error.message =~ ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
+      assert error.message =~ ~r"expected SciCalcOnlyMock.exponent/2 to be invoked once but it was invoked 0 times"
 
       CalcMock.add(2, 3)
-      assert_raise(Mox.VerificationError, &verify!/0)
-      try do
-        verify!()
-      rescue
-        error in Mox.VerificationError ->
-          refute error.message =~ ~r"expected CalcMock.add/2"
-          assert error.message =~ ~r"expected SciCalcOnlyMock.exponent/2 to be invoked once but it was invoked 0 times"
-      end
+      error = assert_raise(Mox.VerificationError, &verify!/0)
+      refute error.message =~ ~r"expected CalcMock.add/2"
+      assert error.message =~ ~r"expected SciCalcOnlyMock.exponent/2 to be invoked once but it was invoked 0 times"  
 
       SciCalcOnlyMock.exponent(2, 3)
       verify!()
 
       # Adding another expected call makes verification fail again
       expect(CalcMock, :add, fn x, y -> x + y end)
-      assert_raise(Mox.VerificationError, &verify!/0)
-      try do
-        verify!()
-      rescue
-        error in Mox.VerificationError ->
-          assert error.message =~ ~r"expected CalcMock.add/2 to be invoked 2 times but it was invoked once"
-          refute error.message =~ ~r"expected SciCalcOnlyMock.exponent/2"
-      end
+      error = assert_raise(Mox.VerificationError, &verify!/0)
+      assert error.message =~ ~r"expected CalcMock.add/2 to be invoked 2 times but it was invoked once"
+      refute error.message =~ ~r"expected SciCalcOnlyMock.exponent/2"
     end
 
     test "verifies all mocks for the current process in global mode" do
@@ -394,26 +379,16 @@ defmodule MoxTest do
       expect(CalcMock, :add, fn x, y -> x + y end)
       expect(SciCalcOnlyMock, :exponent, fn x, y -> x * y end)
 
-      assert_raise(Mox.VerificationError, &verify!/0)
-      try do
-        verify!()
-      rescue
-        error in Mox.VerificationError ->
-          assert error.message =~ ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
-          assert error.message =~ ~r"expected SciCalcOnlyMock.exponent/2 to be invoked once but it was invoked 0 times"
-      end
+      error = assert_raise(Mox.VerificationError, &verify!/0)
+      assert error.message =~ ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
+      assert error.message =~ ~r"expected SciCalcOnlyMock.exponent/2 to be invoked once but it was invoked 0 times"
 
       Task.async(fn -> SciCalcOnlyMock.exponent(2, 4) end)
       |> Task.await()
 
-      assert_raise(Mox.VerificationError, &verify!/0)
-      try do
-        verify!()
-      rescue
-        error in Mox.VerificationError ->
-          assert error.message =~ ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
-          refute error.message =~ ~r"expected SciCalcOnlyMock.exponent/2"
-      end
+      error = assert_raise(Mox.VerificationError, &verify!/0)
+      assert error.message =~ ~r"expected CalcMock.add/2 to be invoked once but it was invoked 0 times"
+      refute error.message =~ ~r"expected SciCalcOnlyMock.exponent/2"
 
       Task.async(fn -> CalcMock.add(5, 6) end)
       |> Task.await()
@@ -421,14 +396,9 @@ defmodule MoxTest do
       verify!()
 
       expect(CalcMock, :add, fn x, y -> x + y end)
-      assert_raise(Mox.VerificationError, &verify!/0)
-      try do
-        verify!()
-      rescue
-        error in Mox.VerificationError ->
-          assert error.message =~ ~r"expected CalcMock.add/2 to be invoked 2 times but it was invoked once"
-          refute error.message =~ ~r"expected SciCalcOnlyMock.exponent/2"
-      end
+      error = assert_raise(Mox.VerificationError, &verify!/0)
+      assert error.message =~ ~r"expected CalcMock.add/2 to be invoked 2 times but it was invoked once"
+      refute error.message =~ ~r"expected SciCalcOnlyMock.exponent/2"
     end
   end
 
