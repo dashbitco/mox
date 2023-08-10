@@ -189,7 +189,7 @@ defmodule Mox do
   when the allowance happens. In such a case, you might specify the allowance
   as a function in the form `(-> pid())`. This function would be resolved late,
   at the very moment of dispatch. If the function does not return an existing
-  PID, it will fail `Mox.UnexpectedCallError`. 
+  PID, it will fail `Mox.UnexpectedCallError`.
 
   ### Global mode
 
