@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.0 (2023-09-20)
+
+### Enhancements
+
+  * Support testing in a cluster
+  * Support a function to retrieve the PID to allow in `Mox.allow/3`
+
 ## v1.0.2 (2022-05-30)
 
 ### Bug fix

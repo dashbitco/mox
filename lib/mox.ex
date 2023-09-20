@@ -189,7 +189,7 @@ defmodule Mox do
   when the allowance happens. In such a case, you might specify the allowance
   as a function in the form `(-> pid())`. This function would be resolved late,
   at the very moment of dispatch. If the function does not return an existing
-  PID, it will fail `Mox.UnexpectedCallError`.
+  PID, Mox will raise a `Mox.UnexpectedCallError` exception.
 
   ### Global mode
 
@@ -684,6 +684,7 @@ defmodule Mox do
   during invocation, the expectation will not succeed.
 
       allow(MyMock, self(), fn -> GenServer.whereis(Deferred) end)
+
   """
   @spec allow(mock, pid(), term()) :: mock when mock: t()
   def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
@@ -827,13 +828,13 @@ defmodule Mox do
                 "called #{times(count + 1)} in #{format_process()}"
 
       {:remote, fun_to_call} ->
-        # it's possible that Mox.Server is running on a remote node in the cluster.  Since the lambda
-        # that we passed is not guaranteed to exist on this node (it might have come from a .exs file)
-        # find the remote node that hosts Mox.Server, and run the lambda on that node.
-
+        # It's possible that Mox.Server is running on a remote node in the cluster. Since the
+        # function that we passed is not guaranteed to exist on that node (it might have come
+        # from a .exs file), find the remote node that hosts Mox.Server, and run the function
+        # on that node.
         Mox.Server
         |> :global.whereis_name()
-        |> node
+        |> node()
         |> :rpc.call(Kernel, :apply, [fun_to_call, args])
 
       {:ok, fun_to_call} ->
