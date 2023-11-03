@@ -507,7 +507,7 @@ defmodule Mox do
 
       expect(MockWeatherAPI, :get_temp, 5, fn _ -> {:ok, 30} end)
 
-  To expect `MockWeatherAPI.get_temp/1` not to be called:
+  To expect `MockWeatherAPI.get_temp/1` not to be called (see also `deny/3`):
 
       expect(MockWeatherAPI, :get_temp, 0, fn _ -> {:ok, 30} end)
 
@@ -538,7 +538,30 @@ defmodule Mox do
   def expect(mock, name, n \\ 1, code)
       when is_atom(mock) and is_atom(name) and is_integer(n) and n >= 0 and is_function(code) do
     calls = List.duplicate(code, n)
-    add_expectation!(mock, name, code, {n, calls, nil})
+    arity = arity(code)
+    add_expectation!(mock, name, arity, {n, calls, nil})
+    mock
+  end
+
+  @doc """
+  Ensures that `name` in `mock` with arity `arity` is not invoked.
+
+  When `deny/3` is invoked, any previously declared `stub` for the same `name` and arity will
+  be removed. This ensures that `deny` will fail if the function is called. If a `stub/3` is
+  invoked **after** `deny/3` for the same `name` and arity, the stub will be used instead, so
+  `deny` will have no effect.
+
+  ## Examples
+
+  To expect `MockWeatherAPI.get_temp/1` to never be called:
+
+      deny(MockWeatherAPI, :get_temp, 1)
+  """
+  @doc since: "1.2.0"
+  @spec deny(mock, atom(), non_neg_integer()) :: mock when mock: t()
+  def deny(mock, name, arity)
+      when is_atom(mock) and is_atom(name) and is_integer(arity) and arity >= 0 do
+    add_expectation!(mock, name, arity, {0, [], nil})
     mock
   end
 
@@ -563,7 +586,8 @@ defmodule Mox do
   @spec stub(mock, atom(), function()) :: mock when mock: t()
   def stub(mock, name, code)
       when is_atom(mock) and is_atom(name) and is_function(code) do
-    add_expectation!(mock, name, code, {0, [], code})
+    arity = arity(code)
+    add_expectation!(mock, name, arity, {0, [], code})
     mock
   end
 
@@ -631,9 +655,12 @@ defmodule Mox do
     |> List.flatten()
   end
 
-  defp add_expectation!(mock, name, code, value) do
+  defp arity(code) do
+    :erlang.fun_info(code)[:arity]
+  end
+
+  defp add_expectation!(mock, name, arity, value) do
     validate_mock!(mock)
-    arity = :erlang.fun_info(code)[:arity]
     key = {mock, name, arity}
 
     unless function_exported?(mock, name, arity) do
