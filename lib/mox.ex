@@ -544,11 +544,11 @@ defmodule Mox do
   end
 
   @doc """
-  Ensures that `name` in `mock` with arity `arity` is not invoked.
+  Ensures that `name`/`arity` in `mock` is not invoked.
 
   When `deny/3` is invoked, any previously declared `stub` for the same `name` and arity will
   be removed. This ensures that `deny` will fail if the function is called. If a `stub/3` is
-  invoked **after** `deny/3` for the same `name` and arity, the stub will be used instead, so
+  invoked **after** `deny/3` for the same `name` and `arity`, the stub will be used instead, so
   `deny` will have no effect.
 
   ## Examples
