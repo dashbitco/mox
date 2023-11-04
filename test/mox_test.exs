@@ -345,6 +345,61 @@ defmodule MoxTest do
     end
   end
 
+  describe "deny/3" do
+    test "allows asserting that function is not called" do
+      deny(CalcMock, :add, 2)
+
+      msg = ~r"expected CalcMock.add/2 to be called 0 times but it has been called once"
+
+      assert_raise Mox.UnexpectedCallError, msg, fn ->
+        CalcMock.add(2, 3) == 5
+      end
+    end
+
+    test "raises if a non-mock is given" do
+      assert_raise ArgumentError, ~r"could not load module Unknown", fn ->
+        deny(Unknown, :add, 2)
+      end
+
+      assert_raise ArgumentError, ~r"module String is not a mock", fn ->
+        deny(String, :add, 2)
+      end
+    end
+
+    test "raises if function is not in behaviour" do
+      assert_raise ArgumentError, ~r"unknown function oops/2 for mock CalcMock", fn ->
+        deny(CalcMock, :oops, 2)
+      end
+
+      assert_raise ArgumentError, ~r"unknown function add/3 for mock CalcMock", fn ->
+        deny(CalcMock, :add, 3)
+      end
+    end
+
+    test "raises even when a stub is defined" do
+      stub(CalcMock, :add, fn _, _ -> :stub end)
+      deny(CalcMock, :add, 2)
+
+      assert_raise Mox.UnexpectedCallError, fn ->
+        CalcMock.add(2, 3)
+      end
+    end
+
+    test "raises if you try to add expectations from non global process" do
+      set_mox_global()
+
+      Task.async(fn ->
+        msg =
+          ~r"Only the process that set Mox to global can set expectations/stubs in global mode"
+
+        assert_raise ArgumentError, msg, fn ->
+          deny(CalcMock, :add, 2)
+        end
+      end)
+      |> Task.await()
+    end
+  end
+
   describe "verify!/0" do
     test "verifies all mocks for the current process in private mode" do
       set_mox_private()
