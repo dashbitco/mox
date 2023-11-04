@@ -556,6 +556,7 @@ defmodule Mox do
   To expect `MockWeatherAPI.get_temp/1` to never be called:
 
       deny(MockWeatherAPI, :get_temp, 1)
+
   """
   @doc since: "1.2.0"
   @spec deny(mock, atom(), non_neg_integer()) :: mock when mock: t()

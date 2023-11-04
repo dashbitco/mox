@@ -347,8 +347,7 @@ defmodule MoxTest do
 
   describe "deny/3" do
     test "allows asserting that function is not called" do
-      CalcMock
-      |> deny(:add, 2)
+      deny(CalcMock, :add, 2)
 
       msg = ~r"expected CalcMock.add/2 to be called 0 times but it has been called once"
 
@@ -394,8 +393,7 @@ defmodule MoxTest do
           ~r"Only the process that set Mox to global can set expectations/stubs in global mode"
 
         assert_raise ArgumentError, msg, fn ->
-          CalcMock
-          |> deny(:add, 2)
+          deny(CalcMock, :add, 2)
         end
       end)
       |> Task.await()
