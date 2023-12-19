@@ -657,7 +657,8 @@ defmodule Mox do
   end
 
   defp arity(code) do
-    :erlang.fun_info(code)[:arity]
+    {:arity, arity} = :erlang.fun_info(code, :arity)
+    arity
   end
 
   defp add_expectation!(mock, name, arity, value) do
