@@ -44,14 +44,16 @@ defmodule Mox.Server do
   # Callbacks
 
   def init(:ok) do
+    {:ok, os} = NimbleOwnership.start_link([])
+
     {:ok,
      %{
        expectations: %{},
-       allowances: %{},
        deps: %{},
        mode: :private,
        global_owner_pid: nil,
-       lazy_calls: false
+       lazy_calls: false,
+       os: os
      }}
   end
 
@@ -88,17 +90,19 @@ defmodule Mox.Server do
         {:add_expectation, owner_pid, {mock, _, _} = key, expectation},
         %{mode: :private} = state
       ) do
-    if allowance = state.allowances[owner_pid][mock] do
-      {:reply, {:error, {:currently_allowed, allowance}}, state}
-    else
-      state = maybe_add_and_monitor_pid(state, owner_pid)
+    case NimbleOwnership.get_owner(state.os, [owner_pid], mock) do
+      %{owner_pid: allower} ->
+        {:reply, {:error, {:currently_allowed, allower}}, state}
 
-      state =
-        update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
-          Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
-        end)
+      nil ->
+        state = maybe_add_and_monitor_pid(state, owner_pid)
 
-      {:reply, :ok, state}
+        state =
+          update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
+            Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
+          end)
+
+        {:reply, :ok, state}
     end
   end
 
@@ -120,18 +124,25 @@ defmodule Mox.Server do
 
   def handle_call(
         {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key, source},
-        %{mode: :private, lazy_calls: lazy_calls} = state
+        %{mode: :private} = state
       ) do
-    state = maybe_revalidate_lazy_calls(lazy_calls, state)
+    owner_pid =
+      case NimbleOwnership.get_owner(state.os, caller_pids, mock) do
+        %{owner_pid: owner_pid} -> owner_pid
+        nil -> nil
+      end
 
     owner_pid =
-      Enum.find_value(caller_pids, List.first(caller_pids), fn caller_pid ->
-        cond do
-          state.allowances[caller_pid][mock] -> state.allowances[caller_pid][mock]
-          state.expectations[caller_pid][key] -> caller_pid
-          true -> false
-        end
-      end)
+      if owner_pid do
+        owner_pid
+      else
+        Enum.find_value(caller_pids, List.first(caller_pids), fn caller_pid ->
+          cond do
+            state.expectations[caller_pid][key] -> caller_pid
+            true -> false
+          end
+        end)
+      end
 
     case state.expectations[owner_pid][key] do
       nil ->
@@ -198,29 +209,11 @@ defmodule Mox.Server do
   end
 
   def handle_call({:allow, mock, owner_pid, pid}, %{mode: :private} = state) do
-    %{allowances: allowances, expectations: expectations} = state
-    owner_pid = state.allowances[owner_pid][mock] || owner_pid
-    allowance = allowances[pid][mock]
-
-    cond do
-      Map.has_key?(expectations, pid) ->
-        {:reply, {:error, :expectations_defined}, state}
-
-      allowance && allowance != owner_pid ->
-        {:reply, {:error, {:already_allowed, allowance}}, state}
-
-      true ->
-        state =
-          maybe_add_and_monitor_pid(state, owner_pid, :DOWN, fn {on, deps} ->
-            {on, [{pid, mock} | deps]}
-          end)
-
-        state =
-          state
-          |> put_in([:allowances, pid_map(pid), mock], owner_pid)
-          |> update_in([:lazy_calls], &(&1 or match?(fun when is_function(fun, 0), pid)))
-
-        {:reply, :ok, state}
+    if Map.has_key?(state.expectations, pid) do
+      {:reply, {:error, :expectations_defined}, state}
+    else
+      reply = NimbleOwnership.allow(state.os, owner_pid, pid, mock, _meta = nil)
+      {:reply, reply, state}
     end
   end
 
@@ -240,13 +233,8 @@ defmodule Mox.Server do
   end
 
   defp down(state, pid) do
-    {{_, deps}, state} = pop_in(state.deps[pid])
     {_, state} = pop_in(state.expectations[pid])
-    {_, state} = pop_in(state.allowances[pid])
-
-    Enum.reduce(deps, state, fn {pid, mock}, acc ->
-      acc.allowances[pid][mock] |> pop_in() |> elem(1)
-    end)
+    state
   end
 
   defp pid_map(pid) do
@@ -275,43 +263,4 @@ defmodule Mox.Server do
 
   defp ok_or_remote(source) when node(source) == node(), do: :ok
   defp ok_or_remote(_source), do: :remote
-
-  defp maybe_revalidate_lazy_calls(false, state), do: state
-
-  defp maybe_revalidate_lazy_calls(true, state) do
-    state.allowances
-    |> Enum.reduce({[], [], false}, fn
-      {key, value}, {result, resolved, unresolved} when is_function(key, 0) ->
-        case key.() do
-          pid when is_pid(pid) ->
-            {[{pid, value} | result], [{key, pid} | resolved], unresolved}
-
-          _ ->
-            {[{key, value} | result], resolved, true}
-        end
-
-      kv, {result, resolved, unresolved} ->
-        {[kv | result], resolved, unresolved}
-    end)
-    |> fix_resolved(state)
-  end
-
-  defp fix_resolved({_, [], _}, state), do: state
-
-  defp fix_resolved({allowances, fun_to_pids, lazy_calls}, state) do
-    fun_to_pids = Map.new(fun_to_pids)
-
-    deps =
-      Map.new(state.deps, fn {pid, {fun, deps}} ->
-        deps =
-          Enum.map(deps, fn
-            {fun, mock} when is_function(fun, 0) -> {Map.get(fun_to_pids, fun, fun), mock}
-            other -> other
-          end)
-
-        {pid, {fun, deps}}
-      end)
-
-    %{state | deps: deps, allowances: Map.new(allowances), lazy_calls: lazy_calls}
-  end
 end

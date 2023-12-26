@@ -752,6 +752,9 @@ defmodule Mox do
       {:error, :in_global_mode} ->
         # Already allowed
         mock
+
+      {:error, {:already_allowed_with_metadata, _}} ->
+        mock
     end
   end
 

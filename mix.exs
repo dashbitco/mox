@@ -7,7 +7,7 @@ defmodule Mox.MixProject do
     [
       app: :mox,
       version: @version,
-      elixir: "~> 1.5",
+      elixir: "~> 1.11",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       name: "Mox",
@@ -30,6 +30,7 @@ defmodule Mox.MixProject do
 
   defp deps do
     [
+      {:nimble_ownership, "~> 0.1.0"},
       {:ex_doc, "~> 0.16", only: :docs}
     ]
   end
