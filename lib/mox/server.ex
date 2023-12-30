@@ -95,14 +95,24 @@ defmodule Mox.Server do
 
   # handle_call
 
-  def handle_call(
-        {:add_expectation, owner_pid, {mock, _, _} = key, expectation},
-        %{mode: :private} = state
-      ) do
-    case NimbleOwnership.fetch_owner(@ownership_server, [owner_pid], mock) do
-      {:ok, ^owner_pid} -> :ok
-      {:ok, other_owner} -> throw({:reply, {:error, {:currently_allowed, other_owner}}, state})
-      :error -> :ok
+  def handle_call({:add_expectation, owner_pid, {mock, _, _} = key, expectation}, state) do
+    case state.mode do
+      :private ->
+        case NimbleOwnership.fetch_owner(@ownership_server, [owner_pid], mock) do
+          {:ok, ^owner_pid} ->
+            :ok
+
+          {:ok, other_owner} ->
+            throw({:reply, {:error, {:currently_allowed, other_owner}}, state})
+
+          :error ->
+            :ok
+        end
+
+      :global ->
+        if owner_pid != state.global_owner_pid do
+          throw({:reply, {:error, {:not_global_owner, state.global_owner_pid}}, state})
+        end
     end
 
     reply =
@@ -117,34 +127,17 @@ defmodule Mox.Server do
     {:reply, reply, state}
   end
 
-  def handle_call(
-        {:add_expectation, owner_pid, {mock, _, _} = key, expectation},
-        %{mode: :global, global_owner_pid: global_owner_pid} = state
-      ) do
-    if owner_pid != global_owner_pid do
-      {:reply, {:error, {:not_global_owner, global_owner_pid}}, state}
-    else
-      reply =
-        NimbleOwnership.get_and_update(@ownership_server, owner_pid, mock, fn
-          nil ->
-            {:ok, %{key => expectation}}
-
-          %{} = expectations ->
-            {:ok, Map.update(expectations, key, expectation, &merge_expectation(&1, expectation))}
-        end)
-
-      {:reply, reply, state}
-    end
-  end
-
-  def handle_call(
-        {:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key, source},
-        %{mode: :private} = state
-      ) do
+  def handle_call({:fetch_fun_to_dispatch, caller_pids, {mock, _, _} = key, source}, state) do
     owner_pid =
-      case NimbleOwnership.fetch_owner(@ownership_server, caller_pids, mock) do
-        {:ok, owner_pid} -> owner_pid
-        :error -> throw({:reply, :no_expectation, state})
+      case state.mode do
+        :private ->
+          case NimbleOwnership.fetch_owner(@ownership_server, caller_pids, mock) do
+            {:ok, owner_pid} -> owner_pid
+            :error -> throw({:reply, :no_expectation, state})
+          end
+
+        :global ->
+          state.global_owner_pid
       end
 
     reply =
@@ -164,36 +157,6 @@ defmodule Mox.Server do
             {{ok_or_remote(source), call}, new_expectations}
         end
       end)
-
-    {:reply, reply, state}
-  end
-
-  def handle_call(
-        {:fetch_fun_to_dispatch, _caller_pids, {mock, _, _} = key, source},
-        %{mode: :global} = state
-      ) do
-    reply =
-      NimbleOwnership.get_and_update(
-        @ownership_server,
-        state.global_owner_pid,
-        mock,
-        fn expectations ->
-          case expectations[key] do
-            nil ->
-              {:no_expectation, expectations}
-
-            {total, [], nil} ->
-              {{:out_of_expectations, total}, expectations}
-
-            {_, [], stub} ->
-              {{ok_or_remote(source), stub}, expectations}
-
-            {total, [call | calls], stub} ->
-              new_expectations = put_in(expectations[key], {total, calls, stub})
-              {{ok_or_remote(source), call}, new_expectations}
-          end
-        end
-      )
 
     {:reply, reply, state}
   end
