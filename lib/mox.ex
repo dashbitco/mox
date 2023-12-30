@@ -730,6 +730,12 @@ defmodule Mox do
       :ok ->
         mock
 
+      {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
+        raise ArgumentError, """
+        cannot allow #{inspect(allowed_pid_or_function)} to use #{inspect(mock)} \
+        because the owner PID #{inspect(owner_pid)} is not allowed to use it\
+        """
+
       {:error, %NimbleOwnership.Error{reason: {:already_allowed, actual_pid}}} ->
         raise ArgumentError, """
         cannot allow #{inspect(allowed_pid_or_function)} to use #{inspect(mock)} \
@@ -742,7 +748,7 @@ defmodule Mox do
         are allowing the same process
         """
 
-      {:error, :expectations_defined} ->
+      {:error, %NimbleOwnership.Error{reason: :already_an_owner}} ->
         raise ArgumentError, """
         cannot allow #{inspect(allowed_pid_or_function)} to use \
         #{inspect(mock)} from #{inspect(owner_pid)} \

@@ -30,7 +30,8 @@ defmodule Mox.MixProject do
 
   defp deps do
     [
-      {:nimble_ownership, "~> 0.1.0"},
+      # {:nimble_ownership, github: "dashbitco/nimble_ownership", branch: "al/rework-api"},
+      {:nimble_ownership, path: "~/Code/nimble_ownership"},
       {:ex_doc, "~> 0.16", only: :docs}
     ]
   end

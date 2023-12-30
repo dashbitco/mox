@@ -4,6 +4,7 @@ defmodule Mox.Server do
   use GenServer
   @timeout 30000
   @this {:global, __MODULE__}
+  @ownership_server {:global, Mox.OwnershipServer}
 
   # API
 
@@ -41,19 +42,27 @@ defmodule Mox.Server do
     GenServer.call(@this, {:set_mode, owner_pid, mode})
   end
 
+  def ownership_server_child_spec do
+    %{id: Mox.OwnershipServer, start: {__MODULE__, :start_ownership_server_link, []}}
+  end
+
+  def start_ownership_server_link do
+    case NimbleOwnership.start_link(name: @ownership_server) do
+      {:error, {:already_started, _}} -> :ignore
+      other -> other
+    end
+  end
+
   # Callbacks
 
   def init(:ok) do
-    {:ok, os} = NimbleOwnership.start_link([])
-
     {:ok,
      %{
        expectations: %{},
        deps: %{},
        mode: :private,
        global_owner_pid: nil,
-       lazy_calls: false,
-       os: os
+       lazy_calls: false
      }}
   end
 
@@ -90,35 +99,41 @@ defmodule Mox.Server do
         {:add_expectation, owner_pid, {mock, _, _} = key, expectation},
         %{mode: :private} = state
       ) do
-    case NimbleOwnership.get_owner(state.os, [owner_pid], mock) do
-      %{owner_pid: allower} ->
-        {:reply, {:error, {:currently_allowed, allower}}, state}
-
-      nil ->
-        state = maybe_add_and_monitor_pid(state, owner_pid)
-
-        state =
-          update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
-            Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
-          end)
-
-        {:reply, :ok, state}
+    case NimbleOwnership.fetch_owner(@ownership_server, [owner_pid], mock) do
+      {:ok, ^owner_pid} -> :ok
+      {:ok, other_owner} -> throw({:reply, {:error, {:currently_allowed, other_owner}}, state})
+      :error -> :ok
     end
+
+    reply =
+      NimbleOwnership.get_and_update(@ownership_server, owner_pid, mock, fn
+        nil ->
+          {:ok, %{key => expectation}}
+
+        %{} = expectations ->
+          {:ok, Map.update(expectations, key, expectation, &merge_expectation(&1, expectation))}
+      end)
+
+    {:reply, reply, state}
   end
 
   def handle_call(
-        {:add_expectation, owner_pid, {_mock, _, _} = key, expectation},
+        {:add_expectation, owner_pid, {mock, _, _} = key, expectation},
         %{mode: :global, global_owner_pid: global_owner_pid} = state
       ) do
     if owner_pid != global_owner_pid do
       {:reply, {:error, {:not_global_owner, global_owner_pid}}, state}
     else
-      state =
-        update_in(state, [:expectations, pid_map(owner_pid)], fn owned_expectations ->
-          Map.update(owned_expectations, key, expectation, &merge_expectation(&1, expectation))
+      reply =
+        NimbleOwnership.get_and_update(@ownership_server, owner_pid, mock, fn
+          nil ->
+            {:ok, %{key => expectation}}
+
+          %{} = expectations ->
+            {:ok, Map.update(expectations, key, expectation, &merge_expectation(&1, expectation))}
         end)
 
-      {:reply, :ok, state}
+      {:reply, reply, state}
     end
   end
 
@@ -127,64 +142,68 @@ defmodule Mox.Server do
         %{mode: :private} = state
       ) do
     owner_pid =
-      case NimbleOwnership.get_owner(state.os, caller_pids, mock) do
-        %{owner_pid: owner_pid} -> owner_pid
-        nil -> nil
+      case NimbleOwnership.fetch_owner(@ownership_server, caller_pids, mock) do
+        {:ok, owner_pid} -> owner_pid
+        :error -> throw({:reply, :no_expectation, state})
       end
 
-    owner_pid =
-      if owner_pid do
-        owner_pid
-      else
-        Enum.find_value(caller_pids, List.first(caller_pids), fn caller_pid ->
-          cond do
-            state.expectations[caller_pid][key] -> caller_pid
-            true -> false
-          end
-        end)
-      end
+    reply =
+      NimbleOwnership.get_and_update(@ownership_server, owner_pid, mock, fn expectations ->
+        case expectations[key] do
+          nil ->
+            {:no_expectation, expectations}
 
-    case state.expectations[owner_pid][key] do
-      nil ->
-        {:reply, :no_expectation, state}
+          {total, [], nil} ->
+            {{:out_of_expectations, total}, expectations}
 
-      {total, [], nil} ->
-        {:reply, {:out_of_expectations, total}, state}
+          {_, [], stub} ->
+            {{ok_or_remote(source), stub}, expectations}
 
-      {_, [], stub} ->
-        {:reply, {ok_or_remote(source), stub}, state}
+          {total, [call | calls], stub} ->
+            new_expectations = put_in(expectations[key], {total, calls, stub})
+            {{ok_or_remote(source), call}, new_expectations}
+        end
+      end)
 
-      {total, [call | calls], stub} ->
-        new_state = put_in(state.expectations[owner_pid][key], {total, calls, stub})
-        {:reply, {ok_or_remote(source), call}, new_state}
-    end
+    {:reply, reply, state}
   end
 
   def handle_call(
-        {:fetch_fun_to_dispatch, _caller_pids, {_mock, _, _} = key, source},
+        {:fetch_fun_to_dispatch, _caller_pids, {mock, _, _} = key, source},
         %{mode: :global} = state
       ) do
-    case state.expectations[state.global_owner_pid][key] do
-      nil ->
-        {:reply, :no_expectation, state}
+    reply =
+      NimbleOwnership.get_and_update(
+        @ownership_server,
+        state.global_owner_pid,
+        mock,
+        fn expectations ->
+          case expectations[key] do
+            nil ->
+              {:no_expectation, expectations}
 
-      {total, [], nil} ->
-        {:reply, {:out_of_expectations, total}, state}
+            {total, [], nil} ->
+              {{:out_of_expectations, total}, expectations}
 
-      {_, [], stub} ->
-        {:reply, {ok_or_remote(source), stub}, state}
+            {_, [], stub} ->
+              {{ok_or_remote(source), stub}, expectations}
 
-      {total, [call | calls], stub} ->
-        new_state = put_in(state.expectations[state.global_owner_pid][key], {total, calls, stub})
-        {:reply, {ok_or_remote(source), call}, new_state}
-    end
+            {total, [call | calls], stub} ->
+              new_expectations = put_in(expectations[key], {total, calls, stub})
+              {{ok_or_remote(source), call}, new_expectations}
+          end
+        end
+      )
+
+    {:reply, reply, state}
   end
 
   def handle_call({:verify, owner_pid, mock, test_or_on_exit}, state) do
-    expectations = state.expectations[owner_pid] || %{}
+    expectations = NimbleOwnership.get_owned(@ownership_server, owner_pid, %{})
 
     pending =
-      for {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expectations,
+      for {_mock, expected_funs} <- expectations,
+          {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expected_funs,
           module == mock or mock == :all do
         {key, count, length(calls)}
       end
@@ -212,7 +231,22 @@ defmodule Mox.Server do
     if Map.has_key?(state.expectations, pid) do
       {:reply, {:error, :expectations_defined}, state}
     else
-      reply = NimbleOwnership.allow(state.os, owner_pid, pid, mock, _meta = nil)
+      reply =
+        case NimbleOwnership.allow(@ownership_server, owner_pid, pid, mock) do
+          :ok ->
+            :ok
+
+          {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
+            NimbleOwnership.get_and_update(@ownership_server, owner_pid, mock, fn expectations ->
+              {:ignored, expectations || %{}}
+            end)
+
+            NimbleOwnership.allow(@ownership_server, owner_pid, pid, mock)
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
       {:reply, reply, state}
     end
   end
@@ -223,7 +257,7 @@ defmodule Mox.Server do
   end
 
   def handle_call({:set_mode, _owner_pid, :private}, state) do
-    {:reply, :ok, %{state | mode: :private, global_owner_pid: nil}}
+    {:reply, :ok, reset_global_mode(state)}
   end
 
   # Helper functions
@@ -235,10 +269,6 @@ defmodule Mox.Server do
   defp down(state, pid) do
     {_, state} = pop_in(state.expectations[pid])
     state
-  end
-
-  defp pid_map(pid) do
-    Access.key(pid, %{})
   end
 
   defp maybe_add_and_monitor_pid(state, pid) do
