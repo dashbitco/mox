@@ -755,7 +755,7 @@ defmodule Mox do
         because the process has already defined its own expectations/stubs
         """
 
-      {:error, :in_global_mode} ->
+      {:error, %NimbleOwnership.Error{reason: :cant_allow_in_global_mode}} ->
         # Already allowed
         mock
     end
