@@ -304,14 +304,14 @@ defmodule Mox do
       setup :set_mox_global
   """
   @spec set_mox_global(term()) :: :ok
-  def set_mox_global(context \\ %{}) do
-    if Map.get(context, :async) do
+  def set_mox_global(context \\ %{})
+
+  def set_mox_global(%{async: true}) do
     raise "Mox cannot be set to global mode when the ExUnit case is async. " <>
             "If you want to use Mox in global mode, remove \"async: true\" when using ExUnit.Case"
-    else
-      Mox.Server.set_mode(self(), :global)
-    end
   end
+
+  def set_mox_global(_context), do: Mox.Server.set_mode(self(), :global)
 
   @doc """
   Chooses the Mox mode based on context.
