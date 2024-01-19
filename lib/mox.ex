@@ -623,24 +623,23 @@ defmodule Mox do
   """
   @spec stub_with(mock, module()) :: mock when mock: t()
   def stub_with(mock, module) when is_atom(mock) and is_atom(module) do
-    mock_behaviours = mock.__mock_for__()
+    behaviours = module_behaviours(module)
+    behaviours_mock = mock.__mock_for__()
+    behaviours_common = Enum.filter(behaviours, &(&1 in behaviours_mock))
 
-    behaviours =
-      case module_behaviours(module) do
-        [] ->
-    raise ArgumentError, "#{inspect(module)} does not implement any behaviour"
-
-        behaviours ->
-          case Enum.filter(behaviours, &(&1 in mock_behaviours)) do
-            [] ->
-    raise ArgumentError,
-          "#{inspect(module)} and #{inspect(mock)} do not share any behaviour"
-
-            common ->
-              common
-          end
+    do_stub_with(mock, module, behaviours, behaviours_common)
   end
 
+  defp do_stub_with(_mock, module, [], _behaviours_common) do
+    raise ArgumentError, "#{inspect(module)} does not implement any behaviour"
+  end
+
+  defp do_stub_with(mock, module, _behaviours, []) do
+    raise ArgumentError,
+          "#{inspect(module)} and #{inspect(mock)} do not share any behaviour"
+  end
+
+  defp do_stub_with(mock, module, behaviours, _behaviours_common) do
     for behaviour <- behaviours,
         {fun, arity} <- behaviour.behaviour_info(:callbacks),
         function_exported?(mock, fun, arity) do
