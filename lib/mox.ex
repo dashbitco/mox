@@ -304,14 +304,14 @@ defmodule Mox do
       setup :set_mox_global
   """
   @spec set_mox_global(term()) :: :ok
-  def set_mox_global(context \\ %{}) do
-    if Map.get(context, :async) do
-      raise "Mox cannot be set to global mode when the ExUnit case is async. " <>
-              "If you want to use Mox in global mode, remove \"async: true\" when using ExUnit.Case"
-    else
-      Mox.Server.set_mode(self(), :global)
-    end
+  def set_mox_global(context \\ %{})
+
+  def set_mox_global(%{async: true}) do
+    raise "Mox cannot be set to global mode when the ExUnit case is async. " <>
+            "If you want to use Mox in global mode, remove \"async: true\" when using ExUnit.Case"
   end
+
+  def set_mox_global(_context), do: Mox.Server.set_mode(self(), :global)
 
   @doc """
   Chooses the Mox mode based on context.
@@ -434,7 +434,7 @@ defmodule Mox do
     for behaviour <- behaviours,
         {fun, arity} <- behaviour.behaviour_info(:callbacks),
         {fun, arity} not in callbacks_to_skip do
-      args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
+      args = 0..arity |> Enum.drop(1) |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
 
       quote do
         def unquote(fun)(unquote_splicing(args)) do
@@ -623,24 +623,23 @@ defmodule Mox do
   """
   @spec stub_with(mock, module()) :: mock when mock: t()
   def stub_with(mock, module) when is_atom(mock) and is_atom(module) do
-    mock_behaviours = mock.__mock_for__()
+    behaviours = module_behaviours(module)
+    behaviours_mock = mock.__mock_for__()
+    behaviours_common = Enum.filter(behaviours, &(&1 in behaviours_mock))
 
-    behaviours =
-      case module_behaviours(module) do
-        [] ->
-          raise ArgumentError, "#{inspect(module)} does not implement any behaviour"
+    do_stub_with(mock, module, behaviours, behaviours_common)
+  end
 
-        behaviours ->
-          case Enum.filter(behaviours, &(&1 in mock_behaviours)) do
-            [] ->
-              raise ArgumentError,
-                    "#{inspect(module)} and #{inspect(mock)} do not share any behaviour"
+  defp do_stub_with(_mock, module, [], _behaviours_common) do
+    raise ArgumentError, "#{inspect(module)} does not implement any behaviour"
+  end
 
-            common ->
-              common
-          end
-      end
+  defp do_stub_with(mock, module, _behaviours, []) do
+    raise ArgumentError,
+          "#{inspect(module)} and #{inspect(mock)} do not share any behaviour"
+  end
 
+  defp do_stub_with(mock, module, behaviours, _behaviours_common) do
     for behaviour <- behaviours,
         {fun, arity} <- behaviour.behaviour_info(:callbacks),
         function_exported?(mock, fun, arity) do
