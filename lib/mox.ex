@@ -306,8 +306,8 @@ defmodule Mox do
   @spec set_mox_global(term()) :: :ok
   def set_mox_global(context \\ %{}) do
     if Map.get(context, :async) do
-      raise "Mox cannot be set to global mode when the ExUnit case is async. " <>
-              "If you want to use Mox in global mode, remove \"async: true\" when using ExUnit.Case"
+    raise "Mox cannot be set to global mode when the ExUnit case is async. " <>
+            "If you want to use Mox in global mode, remove \"async: true\" when using ExUnit.Case"
     else
       Mox.Server.set_mode(self(), :global)
     end
@@ -434,7 +434,7 @@ defmodule Mox do
     for behaviour <- behaviours,
         {fun, arity} <- behaviour.behaviour_info(:callbacks),
         {fun, arity} not in callbacks_to_skip do
-      args = 0..arity |> Enum.to_list() |> tl() |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
+      args = 0..arity |> Enum.drop(1) |> Enum.map(&Macro.var(:"arg#{&1}", Elixir))
 
       quote do
         def unquote(fun)(unquote_splicing(args)) do
@@ -628,18 +628,18 @@ defmodule Mox do
     behaviours =
       case module_behaviours(module) do
         [] ->
-          raise ArgumentError, "#{inspect(module)} does not implement any behaviour"
+    raise ArgumentError, "#{inspect(module)} does not implement any behaviour"
 
         behaviours ->
           case Enum.filter(behaviours, &(&1 in mock_behaviours)) do
             [] ->
-              raise ArgumentError,
-                    "#{inspect(module)} and #{inspect(mock)} do not share any behaviour"
+    raise ArgumentError,
+          "#{inspect(module)} and #{inspect(mock)} do not share any behaviour"
 
             common ->
               common
           end
-      end
+  end
 
     for behaviour <- behaviours,
         {fun, arity} <- behaviour.behaviour_info(:callbacks),
