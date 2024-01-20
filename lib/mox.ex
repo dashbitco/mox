@@ -269,6 +269,11 @@ defmodule Mox do
   """
   @type t() :: module()
 
+  alias NimbleOwnership, as: N
+
+  @timeout 30000
+  @ownership_server {:global, Mox.Server}
+
   defmodule UnexpectedCallError do
     defexception [:message]
   end
@@ -289,7 +294,9 @@ defmodule Mox do
 
   """
   @spec set_mox_private(term()) :: :ok
-  def set_mox_private(_context \\ %{}), do: Mox.Server.set_mode(self(), :private)
+  def set_mox_private(_context \\ %{}) do
+    N.set_mode_to_private(@ownership_server)
+  end
 
   @doc """
   Sets the Mox to global mode.
@@ -311,7 +318,9 @@ defmodule Mox do
             "If you want to use Mox in global mode, remove \"async: true\" when using ExUnit.Case"
   end
 
-  def set_mox_global(_context), do: Mox.Server.set_mode(self(), :global)
+  def set_mox_global(_context) do
+    N.set_mode_to_shared(@ownership_server, self())
+  end
 
   @doc """
   Chooses the Mox mode based on context.
@@ -668,7 +677,7 @@ defmodule Mox do
       raise ArgumentError, "unknown function #{name}/#{arity} for mock #{inspect(mock)}"
     end
 
-    case Mox.Server.add_expectation(self(), key, value) do
+    case add_expectation(self(), key, value) do
       :ok ->
         :ok
 
@@ -681,7 +690,7 @@ defmodule Mox do
         You cannot define expectations/stubs in a process that has been allowed
         """
 
-      {:error, {:not_global_owner, global_pid}} ->
+      {:error, {:not_shared_owner, global_pid}} ->
         inspected = inspect(self())
 
         raise ArgumentError, """
@@ -726,12 +735,12 @@ defmodule Mox do
       raise ArgumentError, "owner_pid and allowed_pid must be different"
     end
 
-    case Mox.Server.allow(mock, owner_pid, allowed_pid_or_function) do
+    case N.allow(@ownership_server, owner_pid, allowed_pid_or_function, mock, @timeout) do
       :ok ->
         mock
 
       {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
-        :ok = Mox.Server.init_mock(owner_pid, mock)
+        :ok = init_mock(owner_pid, mock)
         allow(mock, owner_pid, allowed_via)
         mock
 
@@ -796,8 +805,15 @@ defmodule Mox do
     verify_mock_or_all!(self(), mock)
   end
 
-  defp verify_mock_or_all!(pid, mock) do
-    pending = Mox.Server.verify(pid, mock)
+  defp verify_mock_or_all!(owner_pid, mock_or_all) do
+    all_expectations = N.get_owned(@ownership_server, owner_pid, _default = %{}, @timeout)
+
+    pending =
+      for {_mock, expected_funs} <- all_expectations,
+          {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expected_funs,
+          module == mock_or_all or mock_or_all == :all do
+        {key, count, length(calls)}
+      end
 
     messages =
       for {{module, name, arity}, total, pending} <- pending do
@@ -808,7 +824,8 @@ defmodule Mox do
 
     if messages != [] do
       raise VerificationError,
-            "error while verifying mocks for #{inspect(pid)}:\n\n" <> Enum.join(messages, "\n")
+            "error while verifying mocks for #{inspect(owner_pid)}:\n\n" <>
+              Enum.join(messages, "\n")
     end
 
     :ok
@@ -843,9 +860,7 @@ defmodule Mox do
 
   @doc false
   def __dispatch__(mock, name, arity, args) do
-    all_callers = [self() | caller_pids()]
-
-    case Mox.Server.fetch_fun_to_dispatch(all_callers, {mock, name, arity}) do
+    case fetch_fun_to_dispatch([self() | caller_pids()], {mock, name, arity}) do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
 
@@ -895,4 +910,83 @@ defmodule Mox do
       pids when is_list(pids) -> pids
     end
   end
+
+  ## Ownership
+
+  @doc false
+  def start_link_ownership do
+    case N.start_link(name: @ownership_server) do
+      {:error, {:already_started, _}} -> :ignore
+      other -> other
+    end
+  end
+
+  defp add_expectation(owner_pid, {mock, _, _} = key, expectation) do
+    # First, make sure that the owner_pid is either the owner or that the mock
+    # isn't owned yet. Otherwise, return an error.
+    case N.fetch_owner(@ownership_server, [owner_pid], mock, @timeout) do
+      {tag, ^owner_pid} when tag in [:ok, :shared_owner] -> :ok
+      {:shared_owner, other_owner} -> throw({:error, {:not_shared_owner, other_owner}})
+      {:ok, other_owner} -> throw({:error, {:currently_allowed, other_owner}})
+      :error -> :ok
+    end
+
+    update_fun = fn
+      nil ->
+        {nil, %{key => expectation}}
+
+      %{} = expectations ->
+        {nil, Map.update(expectations, key, expectation, &merge_expectation(&1, expectation))}
+    end
+
+    {:ok, _} = N.get_and_update(@ownership_server, owner_pid, mock, update_fun, @timeout)
+    :ok
+  catch
+    {:error, reason} -> {:error, reason}
+  end
+
+  defp init_mock(owner_pid, mock) do
+    {:ok, _} = N.get_and_update(@ownership_server, owner_pid, mock, &{&1, %{}}, @timeout)
+    :ok
+  end
+
+  defp fetch_fun_to_dispatch(caller_pids, {mock, _, _} = key) do
+    # If the mock doesn't have an owner, it can't have expectations so we return :no_expectation.
+    owner_pid =
+      case N.fetch_owner(@ownership_server, caller_pids, mock, @timeout) do
+        {tag, owner_pid} when tag in [:shared_owner, :ok] -> owner_pid
+        :error -> throw(:no_expectation)
+      end
+
+    parent = self()
+
+    update_fun = fn expectations ->
+      case expectations[key] do
+        nil ->
+          {:no_expectation, expectations}
+
+        {total, [], nil} ->
+          {{:out_of_expectations, total}, expectations}
+
+        {_, [], stub} ->
+          {{ok_or_remote(parent), stub}, expectations}
+
+        {total, [call | calls], stub} ->
+          new_expectations = put_in(expectations[key], {total, calls, stub})
+          {{ok_or_remote(parent), call}, new_expectations}
+      end
+    end
+
+    {:ok, return} = N.get_and_update(@ownership_server, owner_pid, mock, update_fun, @timeout)
+    return
+  catch
+    return -> return
+  end
+
+  defp merge_expectation({current_n, current_calls, _current_stub}, {n, calls, stub}) do
+    {current_n + n, current_calls ++ calls, stub}
+  end
+
+  defp ok_or_remote(source) when node(source) == node(), do: :ok
+  defp ok_or_remote(_source), do: :remote
 end

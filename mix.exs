@@ -30,7 +30,7 @@ defmodule Mox.MixProject do
 
   defp deps do
     [
-      {:nimble_ownership, github: "dashbitco/nimble_ownership", branch: "al/global-mode"},
+      {:nimble_ownership, "~> 0.2.0"},
       {:ex_doc, "~> 0.16", only: :docs}
     ]
   end

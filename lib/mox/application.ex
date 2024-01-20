@@ -4,7 +4,9 @@ defmodule Mox.Application do
   use Application
 
   def start(_, _) do
-    children = [Mox.Server]
+    children = [
+      %{id: Mox, type: :worker, start: {Mox, :start_link_ownership, []}}
+    ]
 
     Supervisor.start_link(children, name: Mox.Supervisor, strategy: :one_for_one)
   end
