@@ -731,10 +731,9 @@ defmodule Mox do
         mock
 
       {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
-        raise ArgumentError, """
-        cannot allow #{inspect(allowed_pid_or_function)} to use #{inspect(mock)} \
-        because the owner PID #{inspect(owner_pid)} is not allowed to use it\
-        """
+        :ok = Mox.Server.init_mock(owner_pid, mock)
+        allow(mock, owner_pid, allowed_via)
+        mock
 
       {:error, %NimbleOwnership.Error{reason: {:already_allowed, actual_pid}}} ->
         raise ArgumentError, """
@@ -755,7 +754,7 @@ defmodule Mox do
         because the process has already defined its own expectations/stubs
         """
 
-      {:error, %NimbleOwnership.Error{reason: :cant_allow_in_global_mode}} ->
+      {:error, %NimbleOwnership.Error{reason: :cant_allow_in_shared_mode}} ->
         # Already allowed
         mock
     end
@@ -773,10 +772,9 @@ defmodule Mox do
   @spec verify_on_exit!(term()) :: :ok
   def verify_on_exit!(_context \\ %{}) do
     pid = self()
-    Mox.Server.verify_on_exit(pid)
 
     ExUnit.Callbacks.on_exit(Mox, fn ->
-      verify_mock_or_all!(pid, :all, :on_exit)
+      verify_mock_or_all!(pid, :all)
     end)
   end
 
@@ -786,7 +784,7 @@ defmodule Mox do
   """
   @spec verify!() :: :ok
   def verify! do
-    verify_mock_or_all!(self(), :all, :test)
+    verify_mock_or_all!(self(), :all)
   end
 
   @doc """
@@ -795,11 +793,11 @@ defmodule Mox do
   @spec verify!(t()) :: :ok
   def verify!(mock) do
     validate_mock!(mock)
-    verify_mock_or_all!(self(), mock, :test)
+    verify_mock_or_all!(self(), mock)
   end
 
-  defp verify_mock_or_all!(pid, mock, test_or_on_exit) do
-    pending = Mox.Server.verify(pid, mock, test_or_on_exit)
+  defp verify_mock_or_all!(pid, mock) do
+    pending = Mox.Server.verify(pid, mock)
 
     messages =
       for {{module, name, arity}, total, pending} <- pending do
