@@ -269,10 +269,8 @@ defmodule Mox do
   """
   @type t() :: module()
 
-  alias NimbleOwnership, as: N
-
   @timeout 30000
-  @ownership_server {:global, Mox.Server}
+  @this {:global, Mox.Server}
 
   defmodule UnexpectedCallError do
     defexception [:message]
@@ -295,7 +293,7 @@ defmodule Mox do
   """
   @spec set_mox_private(term()) :: :ok
   def set_mox_private(_context \\ %{}) do
-    N.set_mode_to_private(@ownership_server)
+    NimbleOwnership.set_mode_to_private(@this)
   end
 
   @doc """
@@ -319,7 +317,7 @@ defmodule Mox do
   end
 
   def set_mox_global(_context) do
-    N.set_mode_to_shared(@ownership_server, self())
+    NimbleOwnership.set_mode_to_shared(@this, self())
   end
 
   @doc """
@@ -735,12 +733,13 @@ defmodule Mox do
       raise ArgumentError, "owner_pid and allowed_pid must be different"
     end
 
-    case N.allow(@ownership_server, owner_pid, allowed_pid_or_function, mock, @timeout) do
+    case NimbleOwnership.allow(@this, owner_pid, allowed_pid_or_function, mock, @timeout) do
       :ok ->
         mock
 
       {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
-        :ok = init_mock(owner_pid, mock)
+        # Init the mock and re-allow.
+        _ = get_and_update!(owner_pid, mock, &{&1, %{}})
         allow(mock, owner_pid, allowed_via)
         mock
 
@@ -806,7 +805,7 @@ defmodule Mox do
   end
 
   defp verify_mock_or_all!(owner_pid, mock_or_all) do
-    all_expectations = N.get_owned(@ownership_server, owner_pid, _default = %{}, @timeout)
+    all_expectations = NimbleOwnership.get_owned(@this, owner_pid, _default = %{}, @timeout)
 
     pending =
       for {_mock, expected_funs} <- all_expectations,
@@ -915,76 +914,77 @@ defmodule Mox do
 
   @doc false
   def start_link_ownership do
-    case N.start_link(name: @ownership_server) do
+    case NimbleOwnership.start_link(name: @this) do
       {:error, {:already_started, _}} -> :ignore
       other -> other
     end
   end
 
   defp add_expectation(owner_pid, {mock, _, _} = key, expectation) do
-    # First, make sure that the owner_pid is either the owner or that the mock
-    # isn't owned yet. Otherwise, return an error.
-    case N.fetch_owner(@ownership_server, [owner_pid], mock, @timeout) do
-      {tag, ^owner_pid} when tag in [:ok, :shared_owner] -> :ok
-      {:shared_owner, other_owner} -> throw({:error, {:not_shared_owner, other_owner}})
-      {:ok, other_owner} -> throw({:error, {:currently_allowed, other_owner}})
-      :error -> :ok
+    case ensure_pid_can_add_expectation(owner_pid, mock) do
+      :ok ->
+        update_fun = &{:ok, init_or_merge_expectations(&1, key, expectation)}
+        :ok = get_and_update!(owner_pid, mock, update_fun)
+
+      {:error, reason} ->
+        {:error, reason}
     end
-
-    update_fun = fn
-      nil ->
-        {nil, %{key => expectation}}
-
-      %{} = expectations ->
-        {nil, Map.update(expectations, key, expectation, &merge_expectation(&1, expectation))}
-    end
-
-    {:ok, _} = N.get_and_update(@ownership_server, owner_pid, mock, update_fun, @timeout)
-    :ok
-  catch
-    {:error, reason} -> {:error, reason}
-  end
-
-  defp init_mock(owner_pid, mock) do
-    {:ok, _} = N.get_and_update(@ownership_server, owner_pid, mock, &{&1, %{}}, @timeout)
-    :ok
   end
 
   defp fetch_fun_to_dispatch(caller_pids, {mock, _, _} = key) do
-    # If the mock doesn't have an owner, it can't have expectations so we return :no_expectation.
-    owner_pid =
-      case N.fetch_owner(@ownership_server, caller_pids, mock, @timeout) do
-        {tag, owner_pid} when tag in [:shared_owner, :ok] -> owner_pid
-        :error -> throw(:no_expectation)
-      end
-
     parent = self()
 
-    update_fun = fn expectations ->
-      case expectations[key] do
-        nil ->
-          {:no_expectation, expectations}
+    with {:ok, owner_pid} <- fetch_owner_from_callers(caller_pids, mock) do
+      get_and_update!(owner_pid, mock, fn expectations ->
+        case expectations[key] do
+          nil ->
+            {:no_expectation, expectations}
 
-        {total, [], nil} ->
-          {{:out_of_expectations, total}, expectations}
+          {total, [], nil} ->
+            {{:out_of_expectations, total}, expectations}
 
-        {_, [], stub} ->
-          {{ok_or_remote(parent), stub}, expectations}
+          {_, [], stub} ->
+            {{ok_or_remote(parent), stub}, expectations}
 
-        {total, [call | calls], stub} ->
-          new_expectations = put_in(expectations[key], {total, calls, stub})
-          {{ok_or_remote(parent), call}, new_expectations}
-      end
+          {total, [call | calls], stub} ->
+            new_expectations = put_in(expectations[key], {total, calls, stub})
+            {{ok_or_remote(parent), call}, new_expectations}
+        end
+      end)
     end
-
-    {:ok, return} = N.get_and_update(@ownership_server, owner_pid, mock, update_fun, @timeout)
-    return
-  catch
-    return -> return
   end
 
-  defp merge_expectation({current_n, current_calls, _current_stub}, {n, calls, stub}) do
-    {current_n + n, current_calls ++ calls, stub}
+  # Make sure that the owner_pid is either the owner or that the mock
+  # isn't owned yet.
+  defp ensure_pid_can_add_expectation(owner_pid, mock) do
+    case NimbleOwnership.fetch_owner(@this, [owner_pid], mock, @timeout) do
+      :error -> :ok
+      {tag, ^owner_pid} when tag in [:ok, :shared_owner] -> :ok
+      {:shared_owner, other_owner} -> {:error, {:not_shared_owner, other_owner}}
+      {:ok, other_owner} -> {:error, {:currently_allowed, other_owner}}
+    end
+  end
+
+  defp fetch_owner_from_callers(caller_pids, mock) do
+    # If the mock doesn't have an owner, it can't have expectations so we return :no_expectation.
+    case NimbleOwnership.fetch_owner(@this, caller_pids, mock, @timeout) do
+      {tag, owner_pid} when tag in [:shared_owner, :ok] -> {:ok, owner_pid}
+      :error -> :no_expectation
+    end
+  end
+
+  defp get_and_update!(owner_pid, mock, update_fun) do
+    case NimbleOwnership.get_and_update(@this, owner_pid, mock, update_fun, @timeout) do
+      {:ok, return} -> return
+      {:error, %NimbleOwnership.Error{} = error} -> raise error
+    end
+  end
+
+  defp init_or_merge_expectations(current_exps, key, {n, calls, stub} = new_exp)
+       when is_map(current_exps) or is_nil(current_exps) do
+    Map.update(current_exps || %{}, key, new_exp, fn {current_n, current_calls, _current_stub} ->
+      {current_n + n, current_calls ++ calls, stub}
+    end)
   end
 
   defp ok_or_remote(source) when node(source) == node(), do: :ok
