@@ -269,6 +269,9 @@ defmodule Mox do
   """
   @type t() :: module()
 
+  @timeout 30000
+  @this {:global, Mox.Server}
+
   defmodule UnexpectedCallError do
     defexception [:message]
   end
@@ -289,7 +292,9 @@ defmodule Mox do
 
   """
   @spec set_mox_private(term()) :: :ok
-  def set_mox_private(_context \\ %{}), do: Mox.Server.set_mode(self(), :private)
+  def set_mox_private(_context \\ %{}) do
+    NimbleOwnership.set_mode_to_private(@this)
+  end
 
   @doc """
   Sets the Mox to global mode.
@@ -311,7 +316,9 @@ defmodule Mox do
             "If you want to use Mox in global mode, remove \"async: true\" when using ExUnit.Case"
   end
 
-  def set_mox_global(_context), do: Mox.Server.set_mode(self(), :global)
+  def set_mox_global(_context) do
+    NimbleOwnership.set_mode_to_shared(@this, self())
+  end
 
   @doc """
   Chooses the Mox mode based on context.
@@ -668,7 +675,7 @@ defmodule Mox do
       raise ArgumentError, "unknown function #{name}/#{arity} for mock #{inspect(mock)}"
     end
 
-    case Mox.Server.add_expectation(self(), key, value) do
+    case add_expectation(self(), key, value) do
       :ok ->
         :ok
 
@@ -681,7 +688,7 @@ defmodule Mox do
         You cannot define expectations/stubs in a process that has been allowed
         """
 
-      {:error, {:not_global_owner, global_pid}} ->
+      {:error, {:not_shared_owner, global_pid}} ->
         inspected = inspect(self())
 
         raise ArgumentError, """
@@ -726,11 +733,17 @@ defmodule Mox do
       raise ArgumentError, "owner_pid and allowed_pid must be different"
     end
 
-    case Mox.Server.allow(mock, owner_pid, allowed_pid_or_function) do
+    case NimbleOwnership.allow(@this, owner_pid, allowed_pid_or_function, mock, @timeout) do
       :ok ->
         mock
 
-      {:error, {:already_allowed, actual_pid}} ->
+      {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
+        # Init the mock and re-allow.
+        _ = get_and_update!(owner_pid, mock, &{&1, %{}})
+        allow(mock, owner_pid, allowed_via)
+        mock
+
+      {:error, %NimbleOwnership.Error{reason: {:already_allowed, actual_pid}}} ->
         raise ArgumentError, """
         cannot allow #{inspect(allowed_pid_or_function)} to use #{inspect(mock)} \
         from #{inspect(owner_pid)} \
@@ -742,14 +755,14 @@ defmodule Mox do
         are allowing the same process
         """
 
-      {:error, :expectations_defined} ->
+      {:error, %NimbleOwnership.Error{reason: :already_an_owner}} ->
         raise ArgumentError, """
         cannot allow #{inspect(allowed_pid_or_function)} to use \
         #{inspect(mock)} from #{inspect(owner_pid)} \
         because the process has already defined its own expectations/stubs
         """
 
-      {:error, :in_global_mode} ->
+      {:error, %NimbleOwnership.Error{reason: :cant_allow_in_shared_mode}} ->
         # Already allowed
         mock
     end
@@ -767,10 +780,9 @@ defmodule Mox do
   @spec verify_on_exit!(term()) :: :ok
   def verify_on_exit!(_context \\ %{}) do
     pid = self()
-    Mox.Server.verify_on_exit(pid)
 
     ExUnit.Callbacks.on_exit(Mox, fn ->
-      verify_mock_or_all!(pid, :all, :on_exit)
+      verify_mock_or_all!(pid, :all)
     end)
   end
 
@@ -780,7 +792,7 @@ defmodule Mox do
   """
   @spec verify!() :: :ok
   def verify! do
-    verify_mock_or_all!(self(), :all, :test)
+    verify_mock_or_all!(self(), :all)
   end
 
   @doc """
@@ -789,11 +801,18 @@ defmodule Mox do
   @spec verify!(t()) :: :ok
   def verify!(mock) do
     validate_mock!(mock)
-    verify_mock_or_all!(self(), mock, :test)
+    verify_mock_or_all!(self(), mock)
   end
 
-  defp verify_mock_or_all!(pid, mock, test_or_on_exit) do
-    pending = Mox.Server.verify(pid, mock, test_or_on_exit)
+  defp verify_mock_or_all!(owner_pid, mock_or_all) do
+    all_expectations = NimbleOwnership.get_owned(@this, owner_pid, _default = %{}, @timeout)
+
+    pending =
+      for {_mock, expected_funs} <- all_expectations,
+          {{module, _, _} = key, {count, [_ | _] = calls, _stub}} <- expected_funs,
+          module == mock_or_all or mock_or_all == :all do
+        {key, count, length(calls)}
+      end
 
     messages =
       for {{module, name, arity}, total, pending} <- pending do
@@ -804,7 +823,8 @@ defmodule Mox do
 
     if messages != [] do
       raise VerificationError,
-            "error while verifying mocks for #{inspect(pid)}:\n\n" <> Enum.join(messages, "\n")
+            "error while verifying mocks for #{inspect(owner_pid)}:\n\n" <>
+              Enum.join(messages, "\n")
     end
 
     :ok
@@ -839,9 +859,7 @@ defmodule Mox do
 
   @doc false
   def __dispatch__(mock, name, arity, args) do
-    all_callers = [self() | caller_pids()]
-
-    case Mox.Server.fetch_fun_to_dispatch(all_callers, {mock, name, arity}) do
+    case fetch_fun_to_dispatch([self() | caller_pids()], {mock, name, arity}) do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
 
@@ -891,4 +909,84 @@ defmodule Mox do
       pids when is_list(pids) -> pids
     end
   end
+
+  ## Ownership
+
+  @doc false
+  def start_link_ownership do
+    case NimbleOwnership.start_link(name: @this) do
+      {:error, {:already_started, _}} -> :ignore
+      other -> other
+    end
+  end
+
+  defp add_expectation(owner_pid, {mock, _, _} = key, expectation) do
+    case ensure_pid_can_add_expectation(owner_pid, mock) do
+      :ok ->
+        update_fun = &{:ok, init_or_merge_expectations(&1, key, expectation)}
+        :ok = get_and_update!(owner_pid, mock, update_fun)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp fetch_fun_to_dispatch(caller_pids, {mock, _, _} = key) do
+    parent = self()
+
+    with {:ok, owner_pid} <- fetch_owner_from_callers(caller_pids, mock) do
+      get_and_update!(owner_pid, mock, fn expectations ->
+        case expectations[key] do
+          nil ->
+            {:no_expectation, expectations}
+
+          {total, [], nil} ->
+            {{:out_of_expectations, total}, expectations}
+
+          {_, [], stub} ->
+            {{ok_or_remote(parent), stub}, expectations}
+
+          {total, [call | calls], stub} ->
+            new_expectations = put_in(expectations[key], {total, calls, stub})
+            {{ok_or_remote(parent), call}, new_expectations}
+        end
+      end)
+    end
+  end
+
+  # Make sure that the owner_pid is either the owner or that the mock
+  # isn't owned yet.
+  defp ensure_pid_can_add_expectation(owner_pid, mock) do
+    case NimbleOwnership.fetch_owner(@this, [owner_pid], mock, @timeout) do
+      :error -> :ok
+      {tag, ^owner_pid} when tag in [:ok, :shared_owner] -> :ok
+      {:shared_owner, other_owner} -> {:error, {:not_shared_owner, other_owner}}
+      {:ok, other_owner} -> {:error, {:currently_allowed, other_owner}}
+    end
+  end
+
+  defp fetch_owner_from_callers(caller_pids, mock) do
+    # If the mock doesn't have an owner, it can't have expectations so we return :no_expectation.
+    case NimbleOwnership.fetch_owner(@this, caller_pids, mock, @timeout) do
+      {tag, owner_pid} when tag in [:shared_owner, :ok] -> {:ok, owner_pid}
+      :error -> :no_expectation
+    end
+  end
+
+  defp get_and_update!(owner_pid, mock, update_fun) do
+    case NimbleOwnership.get_and_update(@this, owner_pid, mock, update_fun, @timeout) do
+      {:ok, return} -> return
+      {:error, %NimbleOwnership.Error{} = error} -> raise error
+    end
+  end
+
+  defp init_or_merge_expectations(current_exps, key, {n, calls, stub} = new_exp)
+       when is_map(current_exps) or is_nil(current_exps) do
+    Map.update(current_exps || %{}, key, new_exp, fn {current_n, current_calls, _current_stub} ->
+      {current_n + n, current_calls ++ calls, stub}
+    end)
+  end
+
+  defp ok_or_remote(source) when node(source) == node(), do: :ok
+  defp ok_or_remote(_source), do: :remote
 end
