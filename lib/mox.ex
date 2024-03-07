@@ -804,8 +804,11 @@ defmodule Mox do
     verify_mock_or_all!(self(), mock)
   end
 
-  defp verify_mock_or_all!(owner_pid, mock_or_all) do
-    all_expectations = NimbleOwnership.get_owned(@this, owner_pid, _default = %{}, @timeout)
+  # Made public for testing.
+  @doc false
+  def verify_mock_or_all!(owner_pid, mock_or_all) do
+    all_expectations =
+      NimbleOwnership.get_owned(@this, owner_pid, _default = %{}, @timeout)
 
     pending =
       for {_mock, expected_funs} <- all_expectations,
