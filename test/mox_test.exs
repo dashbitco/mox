@@ -638,11 +638,11 @@ defmodule MoxTest do
 
       Task.await(task)
     end
-  end
 
-  describe "verify_on_exit!/0 with errors" do
     test "raises if the mocks are not called" do
       pid = self()
+
+      verify_on_exit!()
 
       # This replicates exactly what verify_on_exit/1 does, but it adds an assertion
       # in there. There's no easy way to test that something gets raised in an on_exit
@@ -650,6 +650,7 @@ defmodule MoxTest do
       ExUnit.Callbacks.on_exit(Mox, fn ->
         assert_raise Mox.VerificationError, fn ->
           verify_mock_or_all!(pid, :all)
+          NimbleOwnership.cleanup_owner({:global, Mox.Server}, pid)
         end
       end)
 

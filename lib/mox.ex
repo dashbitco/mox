@@ -780,9 +780,11 @@ defmodule Mox do
   @spec verify_on_exit!(term()) :: :ok
   def verify_on_exit!(_context \\ %{}) do
     pid = self()
+    NimbleOwnership.set_owner_to_manual_cleanup(@this, pid)
 
     ExUnit.Callbacks.on_exit(Mox, fn ->
       verify_mock_or_all!(pid, :all)
+      NimbleOwnership.cleanup_owner(@this, pid)
     end)
   end
 

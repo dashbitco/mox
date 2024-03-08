@@ -30,7 +30,7 @@ defmodule Mox.MixProject do
 
   defp deps do
     [
-      {:nimble_ownership, "~> 0.2.0"},
+      {:nimble_ownership, "~> 0.3.0"},
       {:ex_doc, "~> 0.16", only: :docs}
     ]
   end
