@@ -783,7 +783,7 @@ defmodule Mox do
     NimbleOwnership.set_owner_to_manual_cleanup(@this, pid)
 
     ExUnit.Callbacks.on_exit(Mox, fn ->
-      verify_mock_or_all!(pid, :all)
+      __verify_mock_or_all__(pid, :all)
       NimbleOwnership.cleanup_owner(@this, pid)
     end)
   end
@@ -794,7 +794,7 @@ defmodule Mox do
   """
   @spec verify!() :: :ok
   def verify! do
-    verify_mock_or_all!(self(), :all)
+    __verify_mock_or_all__(self(), :all)
   end
 
   @doc """
@@ -803,12 +803,12 @@ defmodule Mox do
   @spec verify!(t()) :: :ok
   def verify!(mock) do
     validate_mock!(mock)
-    verify_mock_or_all!(self(), mock)
+    __verify_mock_or_all__(self(), mock)
   end
 
   # Made public for testing.
   @doc false
-  def verify_mock_or_all!(owner_pid, mock_or_all) do
+  def __verify_mock_or_all__(owner_pid, mock_or_all) do
     all_expectations = NimbleOwnership.get_owned(@this, owner_pid, _default = %{}, @timeout)
 
     pending =

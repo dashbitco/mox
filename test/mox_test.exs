@@ -649,7 +649,7 @@ defmodule MoxTest do
       # callback.
       ExUnit.Callbacks.on_exit(Mox, fn ->
         assert_raise Mox.VerificationError, fn ->
-          verify_mock_or_all!(pid, :all)
+          Mox.__verify_mock_or_all__(pid, :all)
           NimbleOwnership.cleanup_owner({:global, Mox.Server}, pid)
         end
       end)
