@@ -57,7 +57,7 @@ jobs:
 
       - name: mix test
         run: |
-          if [ -z "${{ matrix.coverage }}"" ]; then
+          if [ -z "${{ matrix.coverage }}" ]; then
             mix test
           else
             mix coveralls.html
