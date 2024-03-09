@@ -14,7 +14,14 @@ defmodule Mox.MixProject do
       description: "Mocks and explicit contracts for Elixir",
       deps: deps(),
       docs: docs(),
-      package: package()
+      package: package(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -31,7 +38,9 @@ defmodule Mox.MixProject do
   defp deps do
     [
       {:nimble_ownership, "~> 0.3.0"},
-      {:ex_doc, "~> 0.16", only: :docs}
+      {:castore, "~> 1.0", only: :test},
+      {:ex_doc, "~> 0.16", only: :docs},
+      {:excoveralls, "~> 0.18", only: :test}
     ]
   end
 
