@@ -71,13 +71,12 @@ jobs:
         run: mix compile --warnings-as-errors
         if: ${{ matrix.lint }}
 
+      # We always need to run tests because code coverage forces us to skip some
+      # tests, so better to run normal tests on the whole matrix and the coverage
+      # only on the latest version.
       - name: Run tests
-        run: |
-          if [ -z "${{ matrix.coverage }}" ]; then
-            echo "Running tests without coverage."
-            mix test
-          else
-            echo "Running tests with coverage."
-            mix test
-            # mix coveralls.html
-          fi
+        run: mix test
+
+      - name: Run tests with coverage
+        if: ${{ matrix.coverage }}
+        run: mix coveralls.github --exclude fails_on_coverage

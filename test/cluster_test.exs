@@ -10,6 +10,9 @@ if otp_release >= 25 do
     use ExUnit.Case
     import Mox
 
+    # These tests don't work if code coverage is enabled.
+    @moduletag :fails_on_coverage
+
     setup_all do
       Task.start_link(fn ->
         System.cmd("epmd", [])
