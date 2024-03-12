@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       MIX_ENV: test
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -22,34 +24,59 @@ jobs:
               elixir: "1.16"
               otp: "26.2"
             lint: lint
+            coverage: coverage
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out this repository
+        uses: actions/checkout@v4
 
-      - uses: erlef/setup-beam@v1
+      - name: Set up Erlang and Elixir
+        uses: erlef/setup-beam@v1
         with:
-          otp-version: ${{matrix.pair.otp}}
-          elixir-version: ${{matrix.pair.elixir}}
+          otp-version: ${{ matrix.pair.otp }}
+          elixir-version: ${{ matrix.pair.elixir }}
 
-      - uses: actions/cache@v4
+      - name: Restored cached Mix dependencies (downloaded and compiled)
+        uses: actions/cache/restore@v4
+        id: restore-mix-deps-cache
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-
+          key: |
+            ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-${{ hashFiles('**/mix.lock') }}-${{ github.run_id }}
+            restore-keys: |
+            ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-${{ hashFiles('**/mix.lock') }}-
+            ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-
 
-      - run: mix deps.get --check-locked
+      - name: Fetch and compile Mix dependencies
+        run: mix do deps.get --check-locked, deps.compile
 
-      - run: mix format --check-formatted
+      - name: Cache compiled Mix dependencies
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ steps.restore-mix-deps-cache.outputs.cache-primary-key }}
+
+      - name: Check for formatted files
+        run: mix format --check-formatted
         if: ${{ matrix.lint }}
 
-      - run: mix deps.unlock --check-unused
+      - name: Check for unused dependencies
+        run: mix deps.unlock --check-unused
         if: ${{ matrix.lint }}
 
-      - run: mix deps.compile
-
-      - run: mix compile --warnings-as-errors
+      - name: Check compilation warnings
+        run: mix compile --warnings-as-errors
         if: ${{ matrix.lint }}
 
-      - run: mix test
+      # We always need to run tests because code coverage forces us to skip some
+      # tests, so better to run normal tests on the whole matrix and the coverage
+      # only on the latest version.
+      - name: Run tests
+        run: mix test
+
+      - name: Run tests with coverage
+        if: ${{ matrix.coverage }}
+        run: mix coveralls.github --exclude fails_on_coverage
