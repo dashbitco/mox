@@ -26,14 +26,18 @@ jobs:
             lint: lint
             coverage: coverage
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out this repository
+        uses: actions/checkout@v4
 
-      - uses: erlef/setup-beam@v1
+      - name: Set up Erlang and Elixir
+        uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.pair.otp }}
           elixir-version: ${{ matrix.pair.elixir }}
 
-      - uses: actions/cache@v4
+      - name: Restored cached Mix dependencies (downloaded and compiled)
+        uses: actions/cache/restore@v4
+        id: restore-mix-deps-cache
         with:
           path: |
             deps
@@ -44,20 +48,30 @@ jobs:
             ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-${{ hashFiles('**/mix.lock') }}-
             ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-
 
-      - run: mix deps.get --check-locked
+      - name: Fetch and compile Mix dependencies
+        run: mix do deps.get --check-locked, deps.compile
 
-      - run: mix format --check-formatted
+      - name: Cache compiled Mix dependencies
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ steps.restore-mix-deps-cache.outputs.cache-primary-key }}
+
+      - name: Check for formatted files
+        run: mix format --check-formatted
         if: ${{ matrix.lint }}
 
-      - run: mix deps.unlock --check-unused
+      - name: Check for unused dependencies
+        run: mix deps.unlock --check-unused
         if: ${{ matrix.lint }}
 
-      - run: mix deps.compile
-
-      - run: mix compile --warnings-as-errors
+      - name: Check compilation warnings
+        run: mix compile --warnings-as-errors
         if: ${{ matrix.lint }}
 
-      - name: mix test
+      - name: Run tests
         run: |
           if [ -z "${{ matrix.coverage }}" ]; then
             mix test
