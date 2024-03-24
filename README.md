@@ -16,6 +16,8 @@ The library follows the principles outlined in ["Mocks and explicit contracts"](
   4. Rely on pattern matching and function clauses for asserting on the
      input instead of complex expectation rules
 
+The goal behind Mox is to help you think and define the contract between the different parts of your application. In the opinion of Mox maintainers, as long as you follow those guidelines and keep your tests concurrent, any library for mocks may be used (or, in certain cases, you may not even need one).
+
 [See the documentation](https://hexdocs.pm/mox) for more information.
 
 ## Installation
