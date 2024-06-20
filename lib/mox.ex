@@ -610,7 +610,7 @@ defmodule Mox do
       end
 
       defmodule MyApp.StubWeatherAPI do
-        @behaviour WeatherAPI
+        @behaviour MyApp.WeatherAPI
         def temp(_loc), do: {:ok, 30}
         def humidity(_loc), do: {:ok, 60}
       end
