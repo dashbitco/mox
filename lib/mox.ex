@@ -647,11 +647,17 @@ defmodule Mox do
   end
 
   defp do_stub_with(mock, module, behaviours, _behaviours_common) do
-    for behaviour <- behaviours,
-        {fun, arity} <- behaviour.behaviour_info(:callbacks),
-        function_exported?(mock, fun, arity) do
-      stub(mock, fun, :erlang.make_fun(module, fun, arity))
-    end
+    key_expectation_list =
+      for behaviour <- behaviours,
+          {fun, arity} <- behaviour.behaviour_info(:callbacks),
+          function_exported?(mock, fun, arity) do
+        {
+          {mock, fun, arity},
+          {0, [], :erlang.make_fun(module, fun, arity)}
+        }
+      end
+
+    add_expectations!(mock, key_expectation_list)
 
     mock
   end
@@ -675,7 +681,19 @@ defmodule Mox do
       raise ArgumentError, "unknown function #{name}/#{arity} for mock #{inspect(mock)}"
     end
 
-    case add_expectation(self(), key, value) do
+    case add_expectations(self(), mock, [{key, value}]) do
+      :ok ->
+        :ok
+
+      {:error, error} ->
+        raise ArgumentError, expectation_error_to_message(error, mock)
+    end
+  end
+
+  defp add_expectations!(mock, key_expectation_list) do
+    validate_mock!(mock)
+
+    case add_expectations(self(), mock, key_expectation_list) do
       :ok ->
         :ok
 
@@ -929,10 +947,10 @@ defmodule Mox do
     end
   end
 
-  defp add_expectation(owner_pid, {mock, _, _} = key, expectation) do
+  defp add_expectations(owner_pid, mock, key_expectation_list) do
     case ensure_pid_can_add_expectation(owner_pid, mock) do
       :ok ->
-        update_fun = &{:ok, init_or_merge_expectations(&1, key, expectation)}
+        update_fun = &{:ok, init_or_merge_expectations(&1, key_expectation_list)}
         :ok = get_and_update!(owner_pid, mock, update_fun)
 
       {:error, reason} ->
@@ -989,12 +1007,17 @@ defmodule Mox do
     end
   end
 
-  defp init_or_merge_expectations(current_exps, key, {n, calls, stub} = new_exp)
+  defp init_or_merge_expectations(current_exps, [{key, {n, calls, stub} = new_exp} | tail])
        when is_map(current_exps) or is_nil(current_exps) do
-    Map.update(current_exps || %{}, key, new_exp, fn {current_n, current_calls, _current_stub} ->
-      {current_n + n, current_calls ++ calls, stub}
-    end)
+    init_or_merge_expectations(
+      Map.update(current_exps || %{}, key, new_exp, fn {current_n, current_calls, _current_stub} ->
+        {current_n + n, current_calls ++ calls, stub}
+      end),
+      tail
+    )
   end
+
+  defp init_or_merge_expectations(current_exps, []), do: current_exps
 
   defp ok_or_remote(source) when node(source) == node(), do: :ok
   defp ok_or_remote(_source), do: :remote
