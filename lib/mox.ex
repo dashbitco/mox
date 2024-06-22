@@ -679,24 +679,29 @@ defmodule Mox do
       :ok ->
         :ok
 
-      {:error, {:currently_allowed, owner_pid}} ->
-        inspected = inspect(self())
-
-        raise ArgumentError, """
-        cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
-        because the process has been allowed by #{inspect(owner_pid)}. \
-        You cannot define expectations/stubs in a process that has been allowed
-        """
-
-      {:error, {:not_shared_owner, global_pid}} ->
-        inspected = inspect(self())
-
-        raise ArgumentError, """
-        cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
-        because Mox is in global mode and the global process is #{inspect(global_pid)}. \
-        Only the process that set Mox to global can set expectations/stubs in global mode
-        """
+      {:error, error} ->
+        raise ArgumentError, expectation_error_to_message(error, mock)
     end
+  end
+
+  defp expectation_error_to_message({:currently_allowed, owner_pid}, mock) do
+    inspected = inspect(self())
+
+    """
+    cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
+    because the process has been allowed by #{inspect(owner_pid)}. \
+    You cannot define expectations/stubs in a process that has been allowed
+    """
+  end
+
+  defp expectation_error_to_message({:not_shared_owner, global_pid}, mock) do
+    inspected = inspect(self())
+
+    """
+    cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
+    because Mox is in global mode and the global process is #{inspect(global_pid)}. \
+    Only the process that set Mox to global can set expectations/stubs in global mode
+    """
   end
 
   @doc """
