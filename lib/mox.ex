@@ -685,11 +685,8 @@ defmodule Mox do
       :ok ->
         :ok
 
-      {:error, error} when is_binary(error) ->
-        raise ArgumentError, error
-
       {:error, error} ->
-        raise error
+        raise_cannot_add_expectation!(error, mock)
     end
   end
 
@@ -700,12 +697,39 @@ defmodule Mox do
       :ok ->
         :ok
 
-      {:error, error} when is_binary(error) ->
-        raise ArgumentError, error
-
       {:error, error} ->
-        raise error
+        raise_cannot_add_expectation!(error, mock)
     end
+  end
+
+  defp raise_cannot_add_expectation!(
+         %NimbleOwnership.Error{reason: {:already_allowed, owner_pid}},
+         mock
+       ) do
+    inspected = inspect(self())
+
+    raise ArgumentError, """
+    cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
+    because the process has been allowed by #{inspect(owner_pid)}. \
+    You cannot define expectations/stubs in a process that has been allowed
+    """
+  end
+
+  defp raise_cannot_add_expectation!(
+         %NimbleOwnership.Error{reason: {:not_shared_owner, global_pid}},
+         mock
+       ) do
+    inspected = inspect(self())
+
+    raise ArgumentError, """
+    cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
+    because Mox is in global mode and the global process is #{inspect(global_pid)}. \
+    Only the process that set Mox to global can set expectations/stubs in global mode
+    """
+  end
+
+  defp raise_cannot_add_expectation!(error, _mock) do
+    raise error
   end
 
   @doc """
@@ -937,28 +961,8 @@ defmodule Mox do
     update_fun = &{:ok, init_or_merge_expectations(&1, key_expectation_list)}
 
     case get_and_update(owner_pid, mock, update_fun) do
-      {:ok, value} ->
-        value
-
-      {:error, %NimbleOwnership.Error{reason: {:already_allowed, _}}} ->
-        inspected = inspect(self())
-
-        {:error,
-         """
-         cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
-         because the process has been allowed by #{inspect(owner_pid)}. \
-         You cannot define expectations/stubs in a process that has been allowed
-         """}
-
-      {:error, %NimbleOwnership.Error{reason: {:not_shared_owner, global_pid}}} ->
-        inspected = inspect(self())
-
-        {:error,
-         """
-         cannot add expectations/stubs to #{inspect(mock)} in the current process (#{inspected}) \
-         because Mox is in global mode and the global process is #{inspect(global_pid)}. \
-         Only the process that set Mox to global can set expectations/stubs in global mode
-         """}
+      {:ok, _value} ->
+        :ok
 
       {:error, error} ->
         {:error, error}
