@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.0 (2024-08-04)
+
+This release is mostly about reducing the complexity of Mox by switching its ownership implementation to use the new [nimble_ownership library](https://github.com/dashbitco/nimble_ownership).
+
+### Enhancements
+
+  * Add `Mox.deny/3`.
+  * Optimize `Mox.stub_with/2`.
+
 ## v1.1.0 (2023-09-20)
 
 ### Enhancements

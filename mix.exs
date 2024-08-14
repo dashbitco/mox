@@ -1,7 +1,7 @@
 defmodule Mox.MixProject do
   use Mix.Project
 
-  @version "1.1.0"
+  @version "1.2.0"
 
   def project do
     [
@@ -37,7 +37,7 @@ defmodule Mox.MixProject do
 
   defp deps do
     [
-      {:nimble_ownership, "~> 0.3"},
+      {:nimble_ownership, "~> 1.0"},
       {:castore, "~> 1.0", only: :test},
       {:ex_doc, "~> 0.16", only: :docs},
       {:excoveralls, "~> 0.18", only: :test}
