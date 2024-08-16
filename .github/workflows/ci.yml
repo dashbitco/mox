@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   test:
@@ -19,10 +19,10 @@ jobs:
         include:
           - pair:
               elixir: "1.11"
-              otp: "21.3"
+              otp: "21"
           - pair:
-              elixir: "1.16"
-              otp: "26.2"
+              elixir: "1.17"
+              otp: "27"
             lint: lint
             coverage: coverage
     steps:
