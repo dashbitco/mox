@@ -1,7 +1,9 @@
 # Mox
 
-[![Hex.pm](https://img.shields.io/hexpm/v/mox.svg?style=flat-square)](https://hex.pm/packages/mox)
-[![Coverage Status](https://coveralls.io/repos/github/dashbitco/mox/badge.svg?branch=main)](https://coveralls.io/github/dashbitco/mox?branch=main)
+[![hex.pm](https://img.shields.io/badge/Package%20on%20hex.pm-informational)](https://hex.pm/packages/mox)
+[![hexdocs.pm](https://img.shields.io/badge/Documentation-ff69b4)](https://hexdocs.pm/mox)
+[![ci](https://github.com/dashbitco/mox/actions/workflows/ci.yml/badge.svg)](https://github.com/dashbitco/mox/actions/workflows/ci.yml)
+[![coverage](https://coveralls.io/repos/github/dashbitco/mox/badge.svg?branch=main)](https://coveralls.io/github/dashbitco/mox?branch=main)
 
 Mox is a library for defining concurrent mocks in Elixir.
 
