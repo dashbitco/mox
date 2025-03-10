@@ -183,6 +183,13 @@ defmodule Mox do
   `$callers` is used to determine the process that actually defined the
   expectations.
 
+  > #### Parent PIDs {: .tip}
+  > [Since OTP 25](https://erlang.org/documentation/doc-15.0-rc2/erts-14.3/doc/html/notes.html#erts-13-0),
+  > `Process.info/2` supports a `:parent` key for retrieving the parent of the given PID.
+  > Mox started using this in v1.3.0 to determine process tree structures in case `$callers`
+  > is not available in the process dictionary. This means that even more allowance cases
+  > are taken care of automatically.
+
   #### Explicit allowances as lazy/deferred functions
 
   Under some circumstances, the process might not have been already started
@@ -941,7 +948,27 @@ defmodule Mox do
 
   # Find the pid of the actual caller
   defp caller_pids do
-    Process.get(:"$callers", [])
+    case Process.get(:"$callers") do
+      nil -> [self() | recursive_parents(self())]
+      pids when is_list(pids) -> pids
+    end
+  end
+
+  # A PID with no parent has :undefined as its parent.
+  defp recursive_parents(:undefined) do
+    []
+  end
+
+  defp recursive_parents(pid) when is_pid(pid) do
+    Process.info(pid, :parent)
+  rescue
+    # erlang:process_info(Pid, parent) is not available, as it was released in
+    # ERTS 13.0 (https://erlang.org/documentation/doc-15.0-rc2/erts-14.3/doc/html/notes.html#erts-13-0)
+    ArgumentError ->
+      []
+  else
+    {:parent, parent_pid} ->
+      [parent_pid | recursive_parents(parent_pid)]
   end
 
   ## Ownership
