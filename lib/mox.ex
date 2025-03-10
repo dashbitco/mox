@@ -941,10 +941,7 @@ defmodule Mox do
 
   # Find the pid of the actual caller
   defp caller_pids do
-    case Process.get(:"$callers") do
-      nil -> []
-      pids when is_list(pids) -> pids
-    end
+    Process.get(:"$callers", [])
   end
 
   ## Ownership
