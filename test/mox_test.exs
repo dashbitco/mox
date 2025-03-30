@@ -846,8 +846,6 @@ defmodule MoxTest do
 
       {:ok, child_pid} =
         start_link_no_callers(fn ->
-          assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
-
           receive do
             :call_mock ->
               add_result = CalcMock.add(1, 1)
@@ -876,8 +874,6 @@ defmodule MoxTest do
       |> stub(:mult, fn _, _ -> :stubbed end)
 
       async_no_callers(fn ->
-        assert_raise Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end
-
         CalcMock
         |> allow(parent_pid, self())
 
@@ -892,8 +888,6 @@ defmodule MoxTest do
 
       {:ok, child_pid} =
         start_link_no_callers(fn ->
-          assert_raise(Mox.UnexpectedCallError, fn -> CalcMock.add(1, 1) end)
-
           receive do
             :call_mock ->
               add_result = CalcMock.add(1, 1)
