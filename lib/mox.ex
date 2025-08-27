@@ -760,6 +760,13 @@ defmodule Mox do
 
       allow(MyMock, self(), fn -> GenServer.whereis(Deferred) end)
 
+  This means that if the process isn’t started yet, you can pass a function
+  that resolves to the pid later. When the mock is invoked,
+  Mox will call this function. If it returns a pid, the call is allowed.
+  If it doesn’t, the expectation fails.
+
+  This is especially useful when testing a `GenServer` that calls the mock during `init/1`,
+  since the server’s pid is not available until after `start_link/1`.
   """
   @spec allow(mock, pid(), term()) :: mock when mock: t()
   def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
