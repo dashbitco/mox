@@ -597,6 +597,17 @@ defmodule Mox do
       stub(MockWeatherAPI, :get_temp, fn _loc -> {:ok, 30} end)
 
   `stub/3` will overwrite any previous calls to `stub/3`.
+
+   > #### ⚠️ Warning {: .warning}
+   >
+   > `stub/3` does **not verify that a call occurred**.
+   > If the production code stops calling the stubbed function
+   > (for example, after a refactor), the test will still pass.
+   >
+   > This can lead to unused stubs lingering in tests and a
+   > false sense of coverage. Use `expect/3` instead when you
+   > want to ensure the function is actually invoked, which is
+   > the preferred approach in most cases.
   """
   @spec stub(mock, atom(), function()) :: mock when mock: t()
   def stub(mock, name, code)
