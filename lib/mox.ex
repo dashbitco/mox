@@ -598,15 +598,15 @@ defmodule Mox do
 
   `stub/3` will overwrite any previous calls to `stub/3`.
 
-   > #### Warning {: .warning}
-   >
-   > `stub/3` does **not verify that a call occurred**.
-   > If the code stops calling the stubbed function
-   > (for example, after a refactor), the test will still pass.
-   >
-   > This can lead to unused stubs lingering in tests.
-   > Always use `expect/3` when you want to ensure the
-   > function is actually invoked.
+  > #### Warning {: .warning}
+  >
+  > `stub/3` does **not verify that a call occurred**.
+  > If the code stops calling the stubbed function
+  > (for example, after a refactor), the test will still pass.
+  >
+  > This can lead to unused stubs lingering in tests.
+  > Always use `expect/3` when you want to ensure the
+  > function is actually invoked.
   """
   @spec stub(mock, atom(), function()) :: mock when mock: t()
   def stub(mock, name, code)
