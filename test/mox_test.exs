@@ -835,6 +835,18 @@ defmodule MoxTest do
         assert SciCalcMock.exponent(2, 10) == 1024
       end)
     end
+
+    test "does not crash verify when all callbacks are optional and skipped" do
+      defmodule AllOptionalImpl do
+        @behaviour AllOptionalCallbacks
+        def optional_fun, do: :ok
+      end
+
+      in_all_modes(fn ->
+        stub_with(AllOptionalMock, AllOptionalImpl)
+        verify!()
+      end)
+    end
   end
 
   describe "allow/3" do
