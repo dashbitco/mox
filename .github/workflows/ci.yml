@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       MIX_ENV: test
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -18,16 +18,16 @@ jobs:
       matrix:
         include:
           - pair:
-              elixir: "1.11"
-              otp: "21"
+              elixir: "1.15"
+              otp: "24"
           - pair:
-              elixir: "1.18"
-              otp: "27"
+              elixir: "1.19"
+              otp: "28"
             lint: lint
             coverage: coverage
     steps:
       - name: Check out this repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Erlang and Elixir
         uses: erlef/setup-beam@v1
@@ -36,7 +36,7 @@ jobs:
           elixir-version: ${{ matrix.pair.elixir }}
 
       - name: Restored cached Mix dependencies (downloaded and compiled)
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: restore-mix-deps-cache
         with:
           path: |
@@ -44,7 +44,7 @@ jobs:
             _build
           key: |
             ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-${{ hashFiles('**/mix.lock') }}-${{ github.run_id }}
-            restore-keys: |
+          restore-keys: |
             ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-${{ hashFiles('**/mix.lock') }}-
             ${{ runner.os }}-mix-${{ matrix.pair.elixir }}-${{ matrix.pair.otp }}-
 
@@ -52,7 +52,7 @@ jobs:
         run: mix do deps.get --check-locked, deps.compile
 
       - name: Cache compiled Mix dependencies
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             deps
