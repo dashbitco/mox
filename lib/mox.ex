@@ -707,6 +707,8 @@ defmodule Mox do
     end
   end
 
+  defp add_expectations!(_mock, []), do: :ok
+
   defp add_expectations!(mock, key_expectation_list) do
     validate_mock!(mock)
 
