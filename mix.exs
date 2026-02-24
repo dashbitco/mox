@@ -7,7 +7,7 @@ defmodule Mox.MixProject do
     [
       app: :mox,
       version: @version,
-      elixir: "~> 1.11",
+      elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       name: "Mox",
