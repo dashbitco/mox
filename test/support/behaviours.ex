@@ -8,3 +8,8 @@ defmodule ScientificCalculator do
   @callback sin(integer()) :: float()
   @optional_callbacks [sin: 1]
 end
+
+defmodule AllOptionalCallbacks do
+  @callback optional_fun() :: :ok
+  @optional_callbacks [optional_fun: 0]
+end

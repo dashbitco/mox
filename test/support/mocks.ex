@@ -7,6 +7,11 @@ Mox.defmock(SciCalcMockWithoutOptional,
   skip_optional_callbacks: true
 )
 
+Mox.defmock(AllOptionalMock,
+  for: AllOptionalCallbacks,
+  skip_optional_callbacks: true
+)
+
 Mox.defmock(MyMockWithoutModuledoc, for: Calculator)
 Mox.defmock(MyMockWithFalseModuledoc, for: Calculator, moduledoc: false)
 Mox.defmock(MyMockWithStringModuledoc, for: Calculator, moduledoc: "hello world")
