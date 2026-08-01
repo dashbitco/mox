@@ -294,10 +294,49 @@ defmodule MoxTest do
 
     test "raises if there is no expectation" do
       assert_raise Mox.UnexpectedCallError,
-                   ~r"no expectation defined for CalcMock\.add/2.*with args \[2, 3\]",
+                   ~r"no expectation found for CalcMock\.add/2.*with args \[2, 3\]",
                    fn ->
                      CalcMock.add(2, 3) == 5
                    end
+    end
+
+    @tag :requires_caller_tracking
+    test "reports when all callers have died" do
+      parent = self()
+
+      {owner, owner_ref} =
+        spawn_monitor(fn ->
+          expect(CalcMock, :add, fn x, y -> x + y end)
+
+          Task.async(fn ->
+            send(parent, {:task_ready, self(), Process.get(:"$callers")})
+
+            receive do
+              :call_mock ->
+                error =
+                  try do
+                    CalcMock.add(1, 1)
+                  rescue
+                    error in Mox.UnexpectedCallError -> error
+                  end
+
+                send(parent, {:mock_error, error})
+            end
+          end)
+        end)
+
+      assert_receive {:task_ready, task, [^owner]}
+      assert_receive {:DOWN, ^owner_ref, :process, ^owner, :normal}
+
+      task_ref = Process.monitor(task)
+      send(task, :call_mock)
+
+      assert_receive {:mock_error, error}
+      assert_receive {:DOWN, ^task_ref, :process, ^task, :normal}
+
+      assert error.message ==
+               "no expectation found for CalcMock.add/2 in process #{inspect(task)} " <>
+                 "(or in its callers [#{inspect(owner)}], all of which are dead) with args [1, 1]"
     end
 
     test "raises if all expectations are consumed" do

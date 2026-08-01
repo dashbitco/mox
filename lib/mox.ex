@@ -922,19 +922,22 @@ defmodule Mox do
 
   @doc false
   def __dispatch__(mock, name, arity, args) do
-    case fetch_fun_to_dispatch([self() | caller_pids()], {mock, name, arity}) do
+    caller_pids = caller_pids()
+
+    case fetch_fun_to_dispatch([self() | caller_pids], {mock, name, arity}) do
       :no_expectation ->
         mfa = Exception.format_mfa(mock, name, arity)
 
         raise UnexpectedCallError,
-              "no expectation defined for #{mfa} in #{format_process()} with args #{inspect(args)}"
+              "no expectation found for #{mfa} in #{format_process(caller_pids, true)} " <>
+                "with args #{inspect(args)}"
 
       {:out_of_expectations, count} ->
         mfa = Exception.format_mfa(mock, name, arity)
 
         raise UnexpectedCallError,
               "expected #{mfa} to be called #{times(count)} but it has been " <>
-                "called #{times(count + 1)} in #{format_process()}"
+                "called #{times(count + 1)} in #{format_process(caller_pids, false)}"
 
       {:remote, fun_to_call} ->
         # It's possible that Mox.Server is running on a remote node in the cluster. Since the
@@ -954,14 +957,17 @@ defmodule Mox do
   defp times(1), do: "once"
   defp times(n), do: "#{n} times"
 
-  defp format_process do
-    callers = caller_pids()
-
+  defp format_process(callers, report_dead_callers?) do
     "process #{inspect(self())}" <>
-      if Enum.empty?(callers) do
-        ""
-      else
-        " (or in its callers #{inspect(callers)})"
+      cond do
+        Enum.empty?(callers) ->
+          ""
+
+        report_dead_callers? and Enum.all?(callers, &(not Process.alive?(&1))) ->
+          " (or in its callers #{inspect(callers)}, all of which are dead)"
+
+        true ->
+          " (or in its callers #{inspect(callers)})"
       end
   end
 
