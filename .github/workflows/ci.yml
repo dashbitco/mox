@@ -24,7 +24,6 @@ jobs:
               elixir: "1.19"
               otp: "28"
             lint: lint
-            coverage: coverage
     steps:
       - name: Check out this repository
         uses: actions/checkout@v6
@@ -71,12 +70,5 @@ jobs:
         run: mix compile --warnings-as-errors
         if: ${{ matrix.lint }}
 
-      # We always need to run tests because code coverage forces us to skip some
-      # tests, so better to run normal tests on the whole matrix and the coverage
-      # only on the latest version.
       - name: Run tests
         run: mix test
-
-      - name: Run tests with coverage
-        if: ${{ matrix.coverage }}
-        run: mix coveralls.github --exclude fails_on_coverage
