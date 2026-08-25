@@ -39,7 +39,7 @@ defmodule Mox.MixProject do
     [
       {:nimble_ownership, "~> 1.0"},
       {:castore, "~> 1.0", only: :test},
-      {:ex_doc, "~> 0.16", only: :docs},
+      {:ex_doc, "~> 0.40", only: :docs},
       {:excoveralls, "~> 0.18", only: :test}
     ]
   end
