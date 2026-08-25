@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0 (2026-08-25)
+
+* Bump Elixir requirement to v1.15
+* Use `Process.info(pid, :parent)` to discover allowances
+* Improve error messages
+
 ## v1.2.0 (2024-08-04)
 
 This release is mostly about reducing the complexity of Mox by switching its ownership implementation to use the new [nimble_ownership library](https://github.com/dashbitco/nimble_ownership).
