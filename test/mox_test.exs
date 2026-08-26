@@ -1172,3 +1172,39 @@ defmodule MoxTest do
     end)
   end
 end
+
+defmodule MoxSyncTest do
+  use ExUnit.Case, async: false
+
+  test "does not crash verify_on_exit when another process calls an unregistered mock while a test runs" do
+    Task.start(fn ->
+      Process.register(self(), :lost_task)
+
+      receive do
+        {:do_it, pid} ->
+          assert_raise Mox.UnexpectedCallError, fn -> SciCalcOnlyMock.exponent(1, 2) end
+          send(pid, :done)
+      end
+    end)
+
+    defmodule MockUsedElsewhereTest do
+      use ExUnit.Case, async: false
+      import Mox
+
+      setup :set_mox_from_context
+      setup :verify_on_exit!
+
+      test "test running when other process calls an unregistered mock" do
+        expect(CalcMock, :add, fn x, y -> x + y end)
+        assert CalcMock.add(1, 2) == 3
+        send(:lost_task, {:do_it, self()})
+        assert_receive :done
+      end
+    end
+
+    output = ExUnit.CaptureIO.capture_io(fn -> ExUnit.run([MockUsedElsewhereTest]) end)
+    # FIXME: refute protocol text
+    assert output =~ "protocol Enumerable not implemented for Atom"
+    assert output =~ "Result: 0/1 passed"
+  end
+end
