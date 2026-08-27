@@ -1025,7 +1025,7 @@ defmodule Mox do
       get_and_update!(owner_pid, mock, fn expectations ->
         case expectations[key] do
           nil ->
-            {:no_expectation, expectations}
+            {:no_expectation, expectations || %{}}
 
           {total, [], nil} ->
             {{:out_of_expectations, total}, expectations}

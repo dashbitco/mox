@@ -1203,8 +1203,7 @@ defmodule MoxSyncTest do
     end
 
     output = ExUnit.CaptureIO.capture_io(fn -> ExUnit.run([MockUsedElsewhereTest]) end)
-    # FIXME: refute protocol text
-    assert output =~ "protocol Enumerable not implemented for Atom"
-    assert output =~ "Result: 0/1 passed"
+    refute output =~ "protocol Enumerable not implemented for Atom"
+    assert output =~ "Result: 1 passed"
   end
 end
