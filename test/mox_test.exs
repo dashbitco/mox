@@ -1156,6 +1156,16 @@ defmodule MoxTest do
       message = ~r/Mox cannot be set to global mode when the ExUnit case is async/
       assert_raise RuntimeError, message, fn -> set_mox_global(%{async: true}) end
     end
+
+    test "does not crash verification after an unexpected call" do
+      set_mox_global()
+
+      assert_raise Mox.UnexpectedCallError, fn ->
+        SciCalcOnlyMock.exponent(1, 2)
+      end
+
+      assert verify!() == :ok
+    end
   end
 
   defp async_no_callers(fun) do

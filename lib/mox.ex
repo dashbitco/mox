@@ -1022,21 +1022,28 @@ defmodule Mox do
     parent = self()
 
     with {:ok, owner_pid} <- fetch_owner_from_callers(caller_pids, mock) do
-      get_and_update!(owner_pid, mock, fn expectations ->
-        case expectations[key] do
-          nil ->
-            {:no_expectation, expectations}
+      get_and_update!(owner_pid, mock, fn
+        nil ->
+          # In shared mode, fetch_owner_from_callers/2 returns the shared owner even when the
+          # mock has not been initialized. Keep expectation metadata consistently map-shaped;
+          # this empty entry is removed with the shared owner's normal ownership cleanup.
+          {:no_expectation, %{}}
 
-          {total, [], nil} ->
-            {{:out_of_expectations, total}, expectations}
+        expectations ->
+          case expectations[key] do
+            nil ->
+              {:no_expectation, expectations}
 
-          {_, [], stub} ->
-            {{ok_or_remote(parent), stub}, expectations}
+            {total, [], nil} ->
+              {{:out_of_expectations, total}, expectations}
 
-          {total, [call | calls], stub} ->
-            new_expectations = put_in(expectations[key], {total, calls, stub})
-            {{ok_or_remote(parent), call}, new_expectations}
-        end
+            {_, [], stub} ->
+              {{ok_or_remote(parent), stub}, expectations}
+
+            {total, [call | calls], stub} ->
+              new_expectations = put_in(expectations[key], {total, calls, stub})
+              {{ok_or_remote(parent), call}, new_expectations}
+          end
       end)
     end
   end
