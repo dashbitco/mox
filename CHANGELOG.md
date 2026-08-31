@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.1 (2026-08-31)
+
+* Do not crash verification after an unexpected call in shared mode
+
 ## v1.3.0 (2026-08-25)
 
 * Bump Elixir requirement to v1.15
