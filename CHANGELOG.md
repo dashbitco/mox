@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.2 (2026-09-11)
+
+* Fix an exception that would be raised in situations where an ancestor of a process in the Mox tree exited.
+
 ## v1.3.1 (2026-08-31)
 
 * Do not crash verification after an unexpected call in shared mode
