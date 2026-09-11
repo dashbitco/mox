@@ -184,6 +184,36 @@ defmodule MoxTest do
       assert CalcMock.mult(3, 2) == 6
     end
 
+    test "can be invoked when the parent process has exited" do
+      in_all_modes(fn ->
+        expect(CalcMock, :add, fn x, y -> x + y end)
+        test_pid = self()
+
+        {parent, parent_ref} =
+          spawn_monitor(fn ->
+            worker =
+              spawn(fn ->
+                receive do
+                  :call_mock -> send(test_pid, {:result, CalcMock.add(2, 3)})
+                end
+              end)
+
+            send(test_pid, {:worker, worker})
+          end)
+
+        assert_receive {:worker, worker}
+        assert_receive {:DOWN, ^parent_ref, :process, ^parent, :normal}
+
+        allow(CalcMock, test_pid, worker)
+        worker_ref = Process.monitor(worker)
+        send(worker, :call_mock)
+
+        assert_receive {:DOWN, ^worker_ref, :process, ^worker, :normal}
+        assert_receive {:result, 5}
+        verify!()
+      end)
+    end
+
     @tag :requires_caller_tracking
     test "is invoked n times by any process in private mode on Elixir 1.8" do
       set_mox_private()

@@ -994,6 +994,9 @@ defmodule Mox do
   else
     {:parent, parent_pid} ->
       [parent_pid | recursive_parents(parent_pid)]
+
+    nil ->
+      []
   end
 
   ## Ownership
