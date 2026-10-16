@@ -118,7 +118,7 @@ defmodule Mox do
 
   You can mock both the weather and past weather behaviour:
 
-      Mox.defmock(MyApp.MockWeatherAPI, for: [MyApp.Weather, MyApp.PastWeather])
+      Mox.defmock(MyApp.MockWeatherAPI, for: [MyApp.WeatherAPI, MyApp.PastWeather])
 
   ## Compile-time requirements
 
@@ -235,7 +235,7 @@ defmodule Mox do
       test "calling a mock from a different process" do
         expect(MyApp.MockWeatherAPI, :temp, fn _loc -> {:ok, 30} end)
 
-        spawn(fn -> MyApp.HumanizedWeather.temp({50.06, 19.94}) end)
+        spawn(fn -> MyApp.HumanizedWeather.display_temp({50.06, 19.94}) end)
 
         verify!()
       end
@@ -258,7 +258,7 @@ defmodule Mox do
           {:ok, 30}
         end)
 
-        spawn(fn -> MyApp.HumanizedWeather.temp({50.06, 19.94}) end)
+        spawn(fn -> MyApp.HumanizedWeather.display_temp({50.06, 19.94}) end)
 
         assert_receive {^ref, :temp}
 
