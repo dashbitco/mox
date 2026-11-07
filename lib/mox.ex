@@ -755,6 +755,8 @@ defmodule Mox do
   Allows other processes to share expectations and stubs
   defined by owner process.
 
+  A dead owner, or an owner that exits before the allowance is recorded, raises `ArgumentError`.
+
   ## Examples
 
   To allow `child_pid` to call any stubs or expectations defined for `MyMock`:
@@ -782,6 +784,10 @@ defmodule Mox do
   """
   @spec allow(mock, pid(), term()) :: mock when mock: t()
   def allow(mock, owner_pid, allowed_via) when is_atom(mock) and is_pid(owner_pid) do
+    do_allow(mock, owner_pid, allowed_via, _retried? = false)
+  end
+
+  defp do_allow(mock, owner_pid, allowed_via, retried?) do
     allowed_pid_or_function =
       case allowed_via do
         fun when is_function(fun, 0) -> fun
@@ -796,11 +802,24 @@ defmodule Mox do
       :ok ->
         mock
 
-      {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
+      {:error, %NimbleOwnership.Error{reason: :not_allowed}} when not retried? ->
         # Init the mock and re-allow.
         _ = get_and_update!(owner_pid, mock, &{&1, %{}})
-        allow(mock, owner_pid, allowed_via)
-        mock
+        do_allow(mock, owner_pid, allowed_via, true)
+
+      {:error, %NimbleOwnership.Error{reason: :not_allowed}} ->
+        reason =
+          if Process.alive?(owner_pid) do
+            "because it does not own #{inspect(mock)}"
+          else
+            "because the owner process is not alive"
+          end
+
+        raise ArgumentError, """
+        cannot allow #{inspect(allowed_pid_or_function)} to use #{inspect(mock)} \
+        from #{inspect(owner_pid)} \
+        #{reason}
+        """
 
       {:error, %NimbleOwnership.Error{reason: {:already_allowed, actual_pid}}} ->
         raise ArgumentError, """

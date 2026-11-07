@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Fix `Mox.allow/3` looping until the caller runs out of memory when the owner process is already dead or exits before the allowance is recorded.
+
 ## v1.3.2 (2026-09-11)
 
 * Fix an exception that would be raised in situations where an ancestor of a process in the Mox tree exited.

@@ -1179,6 +1179,38 @@ defmodule MoxTest do
       end)
       |> Task.await()
     end
+
+    test "raises when allow/3 is called with an already-dead owner" do
+      parent_pid = self()
+      {owner, ref} = spawn_monitor(fn -> :ok end)
+
+      receive do
+        {:DOWN, ^ref, _, _, _} -> :ok
+      end
+
+      pid =
+        spawn(fn ->
+          try do
+            allow(CalcMock, owner, self())
+            send(parent_pid, :returned)
+          rescue
+            error ->
+              send(parent_pid, {:raised, error.__struct__, Exception.message(error)})
+          end
+        end)
+
+      receive do
+        message ->
+          refute message == :returned
+          assert {:raised, ArgumentError, error_message} = message
+          assert error_message =~ ~r/not alive/
+          assert error_message =~ inspect(owner)
+      after
+        1_000 ->
+          Process.exit(pid, :kill)
+          flunk("allow/3 did not return")
+      end
+    end
   end
 
   describe "set_mox_global/1" do
